@@ -147,11 +147,7 @@ def generate_diagram(
         ls_diagrams=[]
 
         for d in range(number_of_diagrams):
-            st.write("Diagram " + str(d+1) + " out of " + str(number_of_diagrams))
-            print("\n\n--- Generating diagram", d+1, "out of", number_of_diagrams, "---")
-
             # Getting context
-            st.write("Getting context")
             html_text = context_mermaid_notation = get_html_text(
                 url=url, 
                 postprocess=False, 
@@ -218,8 +214,7 @@ def generate_diagram(
             attempt = 1
             graph_error = True
             while graph_error == True:
-                st.write("Generating diagram " + str(d+1) + ", attempt " + str(attempt))
-                print("Generating graph, attempt", attempt)
+                st.write("Generating diagram " + str(d+1) + " out of " + str(number_of_diagrams) + " (attempt " + str(attempt) + ")")
                 response = st.session_state.bedrock_runtime.invoke_model(
                     body=body, 
                     modelId=modelId, 
@@ -242,7 +237,7 @@ def generate_diagram(
                     attempt += 1
                     if graph_error is True:
                         st.write("Graph has errors! Reattempting...")
-                        print("Graph has errors! Reattempting...")
+                        # st.write(standardize_graph(str_mermaid_graph))
                     else:
                         st.write("Graph was successfully generated!")
                 else:
@@ -306,7 +301,7 @@ with col1:
             )
 
             with st.container(border=True):
-                st.markdown("**Prompt parameters**") 
+                st.markdown("##### Prompt parameters") 
                 col0, col1 = st.columns(2)
 
                 with col0:
@@ -344,7 +339,7 @@ with col1:
                     )
                 
             with st.container(border=True):
-                st.markdown("**LLM parameters**") 
+                st.markdown("##### LLM parameters") 
                 st.slider(
                     'Max tokens to sample',
                     min_value=1, 
@@ -519,39 +514,45 @@ with col2:
             )
             
             
-            
-#             image_graph = render_graph(ls_diagrams[0]["standardized_graph"])
-            
-#             st.image(
-#                 image=image_graph, 
-#                 caption='Example 1'
-#             )
-            
-            
-            
-            html_code = f"""
-            <html>
-              <body>
-                Here is one mermaid diagram:
-                <pre class="mermaid">
-                {ls_diagrams[0]["standardized_graph"]}
-                </pre>
+            for i in range(len(ls_diagrams)):
+                
+                with st.container(border=True):
+                    st.markdown("##### Visual gist " + str(i+1))
 
+                    tab_image, tab_st_graph, tab_graph, tab_raw = st.tabs(
+                        [
+                            "Image", 
+                            "Postprocessed", 
+                            "Original", 
+                            "Raw LLM output"
+                        ]
+                    )
 
-                <script type="module">
-                  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                  mermaid.initialize({{ startOnLoad: true }});
-                </script>
-              </body>
-            </html>
-            """
-            
-            
-            components.html(
-                html_code,
-                height=600,
-            )
+                    with tab_image:
+                        if ls_diagrams[i]["valid"] is True:
+                            html_code = f"""
+                                        <html>
+                                          <body>
+                                            <pre class="mermaid">
+                                            {ls_diagrams[i]["standardized_graph"]}
+                                            </pre>
+                                            <script type="module">
+                                              import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                                              mermaid.initialize({{ startOnLoad: true }});
+                                            </script>
+                                          </body>
+                                        </html>
+                                        """
 
-
-
-
+                            components.html(
+                                html_code,
+                                height=400,
+                                scrolling=True
+                            )
+                            
+                    with tab_st_graph:
+                        st.markdown("```" + ls_diagrams[i]["standardized_graph"] + "```")
+                    with tab_graph:
+                        st.markdown("```" + ls_diagrams[i]["graph"] + "```")
+                    with tab_raw:
+                        st.write(ls_diagrams[i]["raw"])
