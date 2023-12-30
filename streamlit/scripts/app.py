@@ -16,7 +16,8 @@ from IPython.display import Image
 
 # return the text from an html page
 def get_html_text(url, postprocess=False, print_text=False):
-    html = urlopen(url).read()
+    request = Request(url , headers={'User-Agent': 'Mozilla/5.0'})
+    html = urlopen(request).read()
     soup = BeautifulSoup(html, features="html.parser")
     # kill all script and style elements
     for script in soup(["script", "style"]):
@@ -206,7 +207,7 @@ def generate_diagram(
                     "stop_sequences": ["\n\nHuman:"]
                 }
             )
-            modelId = "anthropic.claude-v2:1"  # change this to use a different version from the model provider
+            modelId = "anthropic.claude-v2:1"
             accept = "application/json"
             contentType = "application/json"
 
@@ -231,6 +232,8 @@ def generate_diagram(
                 graph_validity = check_graph_validity(
                     standardize_graph(str_mermaid_graph)
                 )
+                if graph_validity is False:
+                    st.write("Graph has errors!")
 
                 if repeat_on_error is True:
                     graph_error = not graph_validity
@@ -271,8 +274,9 @@ if 'bedrock_runtime' not in st.session_state:
 #----------------------------------------------------------- streamlit UI
 
 st.set_page_config(layout="wide")
-st.header('Automatic generation of Visual Gist using GenAI')
-st.markdown("This app will understand the content of a webpage, and it will generate a graph representing the summary of this content. This graph is the a visual representation of the gist of the webpage.")
+st.header('Visual Gist')
+st.subheader('Automatic generation of visual summaries using GenAI')
+st.markdown("One image is a 1000 words! This app puts this saying in to practice. It captures the text of a webpage, and it generates a **visual graph representing the summary of the text**. Taking a glance at this 'Visual Gist', will help you understand the main content without having to actually read the whole webpage.")
 
 col1, col2 = st.columns(2)
 
@@ -375,14 +379,18 @@ with col1:
                 
         with tab_webpage_text:
             if st.session_state.text_url != "":
-                html_text = get_html_text(
-                    st.session_state.text_url, 
-                    postprocess=False, 
-                    print_text=False
-                )
-                st.text(html_text)
+                try:
+                    html_text = get_html_text(
+                        st.session_state.text_url, 
+                        postprocess=False, 
+                        print_text=False
+                    )
+                    st.markdown(html_text)
+                except Exception as e:
+                    st.markdown("There was a problem accessing the webpage!")
+                    st.markdown(str(e))
             else:
-                st.text("No webpage URL has been provided in the Parameters tab!") 
+                st.markdown("No webpage URL has been provided in the Parameters tab!") 
         
         with tab_prompt_template:
             prompt_template = f"""\n\nHuman: 
@@ -529,12 +537,12 @@ with col2:
                     )
 
                     with tab_image:
-                        if ls_diagrams[i]["valid"] is True:
+                        # if ls_diagrams[i]["valid"] is True:
                             html_code = f"""
                                         <html>
                                           <body>
                                             <pre class="mermaid">
-                                            {ls_diagrams[i]["standardized_graph"]}
+                                            {ls_diagrams[i]["graph"]}
                                             </pre>
                                             <script type="module">
                                               import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
@@ -555,4 +563,4 @@ with col2:
                     with tab_graph:
                         st.markdown("```" + ls_diagrams[i]["graph"] + "```")
                     with tab_raw:
-                        st.write(ls_diagrams[i]["raw"])
+                        st.markdown(ls_diagrams[i]["raw"])
