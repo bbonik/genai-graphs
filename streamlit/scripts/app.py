@@ -131,10 +131,11 @@ def standardize_graph(graph):
 
 def generate_diagram(
     url,
+    prompt,
     number_of_diagrams=1,
     kind="flowchart", # "mindmap" or "flowchart"
     orientation="LR", # "LR" or "TD"
-    repeat_on_error = True,
+    repeat_on_error=True,
     mermaid_context=True,
     max_tokens_to_sample=500,
     temperature=0.9,
@@ -162,39 +163,6 @@ def generate_diagram(
                 )
             else:
                 context_mermaid_notation = ""
-
-
-            # Defining prompt
-            prompt = f"""\n\nHuman: 
-            Here is a text for you to reference for the following task:
-            <text>
-            {html_text}
-            </text>
-
-            Task: Summarize the given text and provide the summary inside <summary> tags. 
-            Then convert the summary to a {kind} using Mermaid notation. 
-
-            <mermaid_notation>
-            {context_mermaid_notation}
-            </mermaid_notation>
-
-            The {kind} should capture the main gist of the summary, without too many low-level details. 
-            Someone who would only view the Mermaid {kind}, should understand the gist of the summary. 
-            The Mermaid {kind} should follow all the correct notation rules and should compile without any errors.
-            Use the following specifications for the generated Mermaid {kind}:
-
-            <specifications>
-            1. Use different colors, shapes or groups to represent different concepts in the given text.
-            2. The orientation of the Mermaid {kind} should be {orientation}.
-            3. Any text inside parenthesis (), square brackets [], curly brackets {{}}, or bars ||, should be inside quotes "".
-            4. Include the Mermaid {kind} inside <mermaid> tags.
-            5. Do not write anything after the </mermaid> tag.
-            6. Use only information from within the given text. Don't make up new information.
-            </specifications>
-
-            \n\nAssistant:
-            """
-            prompt = prompt.replace("{{}}", "{}")
 
             # setting parameters 
             body = json.dumps(
@@ -232,8 +200,8 @@ def generate_diagram(
                 graph_validity = check_graph_validity(
                     standardize_graph(str_mermaid_graph)
                 )
-                if graph_validity is False:
-                    st.write("Graph has errors!")
+                # if graph_validity is False:
+                #     st.write("Graph may have errors!")
 
                 if repeat_on_error is True:
                     graph_error = not graph_validity
@@ -241,11 +209,8 @@ def generate_diagram(
                     if graph_error is True:
                         st.write("Graph has errors! Reattempting...")
                         # st.write(standardize_graph(str_mermaid_graph))
-                    else:
-                        st.write("Graph was successfully generated!")
                 else:
                     graph_error = False
-
 
             # log outputs
             dc_output = {}
@@ -255,7 +220,6 @@ def generate_diagram(
             dc_output["valid"] = graph_validity
             ls_diagrams.append(dc_output)
 
-    
         status.update(label="Diagram complete!", state="complete", expanded=False)
     return ls_diagrams
 
@@ -270,8 +234,9 @@ if 'bedrock_runtime' not in st.session_state:
     )
     
 
-
-#----------------------------------------------------------- streamlit UI
+#-------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------- streamlit UI ------------------------------
+#-------------------------------------------------------------------------------------------------------
 
 st.set_page_config(layout="wide")
 st.header('Visual Gist')
@@ -319,7 +284,7 @@ with col1:
                     )
                     st.checkbox(
                         'Repeat on error',
-                        value=True,
+                        value=False,
                         key='checkbox_repeat',
                     )
                     st.checkbox(
@@ -446,7 +411,6 @@ with col1:
                 else:
                     context_mermaid_notation = ""
                 
-
                 # prompt 
                 prompt = f"""\n\nHuman: 
                 Here is a text for you to reference for the following task:
@@ -476,6 +440,14 @@ with col1:
                 </specifications>
                 \n\nAssistant:
                 """
+                    
+                prompt = prompt.replace("{{}}", "{}")   
+                
+                if st.session_state.checkbox_mermaid_context is False:
+                    prompt = prompt.replace(
+                        prompt[prompt.find("<mermaid_notation>"):prompt.find("</mermaid_notation>")+21], 
+                        ""
+                    )
 
                 st.text_area(
                     label="Customize the prompt as needed:",
@@ -510,6 +482,7 @@ with col2:
             
             ls_diagrams = generate_diagram(
                 url=st.session_state.text_url,
+                prompt=st.session_state.text_prompt,
                 number_of_diagrams=st.session_state.input_number_of_diagrams,
                 kind=st.session_state.selectbox_kind,
                 orientation=st.session_state.selectbox_orientation,
