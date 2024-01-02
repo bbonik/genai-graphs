@@ -24,6 +24,7 @@ def get_html_text(url, postprocess=False, print_text=False):
         script.extract()    # rip it out
     # get text
     text = soup.get_text()
+    st.session_state.webpage_title = soup.title.text
     if postprocess is True:
         # break into lines and remove leading and trailing space on each
         lines = (line.strip() for line in text.splitlines())
@@ -31,6 +32,7 @@ def get_html_text(url, postprocess=False, print_text=False):
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         # drop blank lines
         text = '\n'.join(chunk for chunk in chunks if chunk)
+        
     if print_text is True:
         print(text)
     return text
@@ -149,20 +151,6 @@ def generate_diagram(
         ls_diagrams=[]
 
         for d in range(number_of_diagrams):
-            # Getting context
-            html_text = context_mermaid_notation = get_html_text(
-                url=url, 
-                postprocess=False, 
-                print_text=False
-            )
-            if mermaid_context is True:
-                context_mermaid_notation = get_html_text(
-                    url="https://mermaid.js.org/syntax/flowchart.html", 
-                    postprocess=False, 
-                    print_text=False
-                )
-            else:
-                context_mermaid_notation = ""
 
             # setting parameters 
             body = json.dumps(
@@ -232,6 +220,43 @@ if 'bedrock_runtime' not in st.session_state:
         region = os.environ.get("AWS_DEFAULT_REGION", None),
         runtime = True
     )
+if 'webpage_title' not in st.session_state:
+    st.session_state.webpage_title = ""
+
+if 'prompt_template' not in st.session_state:
+    st.session_state.prompt_template = """\n\nHuman:              
+    You are an amazing professor who can read any webpage, break it down to its essentials, and explain it visually to anyone using Mermaid graphs. 
+                
+    Here is a revision of the Mermaid notation and a given webpage text for you to reference for the following task. Read both of them carefully because they are necessary for the task that you will have to solve. 
+                
+    <mermaid_notation>
+    {context_mermaid_notation}
+    </mermaid_notation>
+
+    <text>
+    {html_text}
+    </text>
+
+    <task>
+    Summarize the given text and provide the summary inside <summary> tags. 
+    Then convert the summary to a {kind} using Mermaid notation. 
+    The {kind} should capture the main gist of the summary, without too many low-level details. 
+    Someone who would only view the Mermaid {kind}, should understand the gist of the summary. 
+    The Mermaid {kind} should follow all the correct notation rules and should compile without any errors.
+    Use the following specifications for the generated Mermaid {kind}:
+    </task>
+
+    <specifications>
+    1. Use different colors and shapes (e.g. rectangle, circle, rhombus, hexagon, trapezoid, parallelogram etc.) to represent different concepts in the given text.
+    2. The orientation of the Mermaid {kind} should be {orientation}.
+    3. Any text inside parenthesis (), square brackets [], curly brackets {}, or bars ||, should be inside quotes "".
+    4. Include the Mermaid {kind} inside <mermaid> </mermaid> tags.
+    5. Do not write anything after the </mermaid> tag.
+    6. Use only information from within the given text. Don't make up new information.
+    7. Before the output, check the result for any errors. 
+    </specifications>
+    \n\nAssistant:
+    """
     
 
 #-------------------------------------------------------------------------------------------------------
@@ -303,7 +328,7 @@ with col1:
                     st.selectbox(
                         label='Orientation', 
                         key='selectbox_orientation',
-                        options=('LR', 'TD'),
+                        options=('LR', 'RL', 'TD', 'BT'),
                         index=0
                     )
                 
@@ -358,36 +383,7 @@ with col1:
                 st.markdown("No webpage URL has been provided in the Parameters tab!") 
         
         with tab_prompt_template:
-            prompt_template = f"""\n\nHuman: 
-            Here is a text for you to reference for the following task:
-            <text>
-            {{html_text}}
-            </text>
-
-            Task: Summarize the given text and provide the summary inside <summary> tags. 
-            Then convert the summary to a {{kind}} using Mermaid notation. 
-
-            <mermaid_notation>
-            {{context_mermaid_notation}}
-            </mermaid_notation>
-
-            The {{kind}} should capture the main gist of the summary, without too many low-level details. 
-            Someone who would only view the Mermaid {{kind}}, should understand the gist of the summary. 
-            The Mermaid {{kind}} should follow all the correct notation rules and should compile without any errors.
-            Use the following specifications for the generated Mermaid {{kind}}:
-
-            <specifications>
-            1. Use different colors, shapes or groups to represent different concepts in the given text.
-            2. The orientation of the Mermaid {{kind}} should be {{orientation}}.
-            3. Any text inside parenthesis (), square brackets [], curly brackets {{}}, or bars ||, should be inside quotes "".
-            4. Include the Mermaid {{kind}} inside <mermaid> tags.
-            5. Do not write anything after the </mermaid> tag.
-            6. Use only information from within the given text. Don't make up new information.
-            </specifications>
-            \n\nAssistant:
-            """
-            st.text(prompt_template)
-
+            st.text(st.session_state.prompt_template)
 
         with tab_prompt:
 
@@ -395,12 +391,6 @@ with col1:
 
                 kind = st.session_state.selectbox_kind
                 orientation = st.session_state.selectbox_orientation
-
-                html_text = get_html_text(
-                    url=st.session_state.text_url, 
-                    postprocess=False, 
-                    print_text=False
-                )
                 
                 if st.session_state.checkbox_mermaid_context is True:
                     context_mermaid_notation = get_html_text(
@@ -408,47 +398,26 @@ with col1:
                         postprocess=False, 
                         print_text=False
                     )
-                else:
-                    context_mermaid_notation = ""
                 
-                # prompt 
-                prompt = f"""\n\nHuman: 
-                Here is a text for you to reference for the following task:
-                <text>
-                {html_text}
-                </text>
-
-                Task: Summarize the given text and provide the summary inside <summary> tags. 
-                Then convert the summary to a {kind} using Mermaid notation. 
-
-                <mermaid_notation>
-                {context_mermaid_notation}
-                </mermaid_notation>
-
-                The {kind} should capture the main gist of the summary, without too many low-level details. 
-                Someone who would only view the Mermaid {kind}, should understand the gist of the summary. 
-                The Mermaid {kind} should follow all the correct notation rules and should compile without any errors.
-                Use the following specifications for the generated Mermaid {kind}:
-
-                <specifications>
-                1. Use different colors, shapes or groups to represent different concepts in the given text.
-                2. The orientation of the Mermaid {kind} should be {orientation}.
-                3. Any text inside parenthesis (), square brackets [], curly brackets {{}}, or bars ||, should be inside quotes "".
-                4. Include the Mermaid {kind} inside <mermaid> tags.
-                5. Do not write anything after the </mermaid> tag.
-                6. Use only information from within the given text. Don't make up new information.
-                </specifications>
-                \n\nAssistant:
-                """
-                    
-                prompt = prompt.replace("{{}}", "{}")   
+                html_text = get_html_text(
+                    url=st.session_state.text_url, 
+                    postprocess=False, 
+                    print_text=False
+                )
                 
+                # preparing prompt
+                prompt = st.session_state.prompt_template  # start from prompt template
                 if st.session_state.checkbox_mermaid_context is False:
                     prompt = prompt.replace(
                         prompt[prompt.find("<mermaid_notation>"):prompt.find("</mermaid_notation>")+21], 
                         ""
                     )
-
+                prompt = prompt.replace("{context_mermaid_notation}", context_mermaid_notation)
+                prompt = prompt.replace("{html_text}", html_text)
+                prompt = prompt.replace("{kind}", kind)
+                prompt = prompt.replace("{orientation}", orientation)
+                
+            
                 st.text_area(
                     label="Customize the prompt as needed:",
                     value=prompt,
@@ -511,25 +480,26 @@ with col2:
 
                     with tab_image:
                         # if ls_diagrams[i]["valid"] is True:
-                            html_code = f"""
-                                        <html>
-                                          <body>
-                                            <pre class="mermaid">
-                                            {ls_diagrams[i]["graph"]}
-                                            </pre>
-                                            <script type="module">
-                                              import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                                              mermaid.initialize({{ startOnLoad: true }});
-                                            </script>
-                                          </body>
-                                        </html>
-                                        """
+                        st.markdown("**" + st.session_state.webpage_title + "**")
+                        html_code = f"""
+                                    <html>
+                                      <body>
+                                        <pre class="mermaid">
+                                        {ls_diagrams[i]["graph"]}
+                                        </pre>
+                                        <script type="module">
+                                          import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                                          mermaid.initialize({{ startOnLoad: true }});
+                                        </script>
+                                      </body>
+                                    </html>
+                                    """
 
-                            components.html(
-                                html_code,
-                                height=400,
-                                scrolling=True
-                            )
+                        components.html(
+                            html_code,
+                            height=400,
+                            scrolling=True
+                        )
                             
                     with tab_st_graph:
                         st.markdown("```" + ls_diagrams[i]["standardized_graph"] + "```")
