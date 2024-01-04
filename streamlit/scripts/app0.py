@@ -63,58 +63,60 @@ def render_graph(graph, show_link=False):
 
     
     
-def check_graph_validity(graph):
-    graphbytes = graph.encode("utf8")
-    base64_bytes = base64.b64encode(graphbytes)
-    base64_string = base64_bytes.decode("ascii")
-    url = "https://mermaid.ink/img/" + base64_string
-    req = Request(url, headers={'User-Agent' : "Magic Browser"})
-    flag_valid = True
-    try: 
-        con = urlopen(req)
-    except:
-        flag_valid = False
-    
-    return flag_valid
-
-
 # def check_graph_validity(graph):
-#     js_code = f'''
-#     <html>
-#       <body>
-#         <script type="module">
-#           import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
-#           let textStr = "{graph}";
-#           let valid = "True";
-#           try{{
-#             await mermaid.parse(textStr);
-#           }}
-#           catch(err){{
-#             valid = "False";
-#           }}
-#           parent.window.valid = valid;
-#         </script>
-#       </body>
-#     </html>
-#     '''
-#     # js_code = js_code.replace("MERMAID_GRAPH", graph)  # substitute the mermaid graph
-#     js_code = js_code.replace("{{", "{")
-#     js_code = js_code.replace("}}", "}")
+#     graphbytes = graph.encode("utf8")
+#     base64_bytes = base64.b64encode(graphbytes)
+#     base64_string = base64_bytes.decode("ascii")
+#     url = "https://mermaid.ink/img/" + base64_string
+#     req = Request(url, headers={'User-Agent' : "Magic Browser"})
     
-#     # run the html code
-#     components.html(
-#         js_code,
-#         height=1,
-#         width=1,
-#     )
+#     flag_valid = True
+#     try: 
+#         con = urlopen(req)
+#     except:
+#         flag_valid = False
     
-#     while True:
-#         valid = st_javascript('parent.window.valid')
-#         if (valid == "True") | (valid == "False"):
-#             break
-#         time.sleep(5)    
+#     return flag_valid
 
-#     return valid
+
+def check_graph_validity(graph):
+    
+    js_code = f'''
+    <html>
+      <body>
+        <script type="module">
+          import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+          let textStr = "{graph}";
+          let valid = "True";
+          try{{
+            await mermaid.parse(textStr);
+          }}
+          catch(err){{
+            valid = "False";
+          }}
+          parent.window.valid = valid;
+        </script>
+      </body>
+    </html>
+    '''
+    # js_code = js_code.replace("MERMAID_GRAPH", graph)  # substitute the mermaid graph
+    js_code = js_code.replace("{{", "{")
+    js_code = js_code.replace("}}", "}")
+    
+    # run the html code
+    components.html(
+        js_code,
+        height=1,
+        width=1,
+    )
+    
+    while True:
+        valid = st_javascript('parent.window.valid')
+        if (valid == "True") | (valid == "False"):
+            break
+        time.sleep(5)    
+
+    return valid
 
 
     
@@ -246,7 +248,8 @@ def generate_diagram(
                     "</mermaid>"
                 )
                 graph_validity = check_graph_validity(
-                    str_mermaid_graph
+                    linearize_graph(str_mermaid_graph)
+                    # str_mermaid_graph
                 )
 
                 if repeat_on_error is True:
@@ -254,6 +257,7 @@ def generate_diagram(
                     attempt += 1
                     if graph_error is True:
                         st.write("Graph has errors! Reattempting...")
+                        # st.write(standardize_graph(str_mermaid_graph))
                 else:
                     graph_error = False
 
@@ -304,14 +308,13 @@ if 'prompt_template' not in st.session_state:
     </task>
 
     <specifications>
-    1. Use different colors, shapes (e.g. rectangle, circle, rhombus, hexagon, trapezoid, parallelogram etc.) and subgraphs to represent different concepts in the given text.
-    2. If you are using subgraphs, each subgraph should have its own indicative name within quotes.
-    3. The orientation of the Mermaid {kind} should be {orientation}.
-    4. Any text inside parenthesis (), square brackets [], curly brackets {}, or bars ||, should be inside quotes "".
-    5. Include the Mermaid {kind} inside <mermaid> </mermaid> tags.
-    6. Do not write anything after the </mermaid> tag.
-    7. Use only information from within the given text. Don't make up new information.
-    8. Before the output, check the result for any errors. 
+    1. Use different colors and shapes (e.g. rectangle, circle, rhombus, hexagon, trapezoid, parallelogram etc.) to represent different concepts in the given text.
+    2. The orientation of the Mermaid {kind} should be {orientation}.
+    3. Any text inside parenthesis (), square brackets [], curly brackets {}, or bars ||, should be inside quotes "".
+    4. Include the Mermaid {kind} inside <mermaid> </mermaid> tags.
+    5. Do not write anything after the </mermaid> tag.
+    6. Use only information from within the given text. Don't make up new information.
+    7. Before the output, check the result for any errors. 
     </specifications>
     \n\nAssistant:
     """
@@ -487,9 +490,39 @@ with col1:
                 st.text("No webpage URL has been provided in the Parameters tab!")
 
                 
+    # experimental
+    with st.container(border=False):
+        
+        graph="""
+        flowchart LR
+            A[Use Case?] --> B{Built-in algorithm?}
+            B --> |Yes| C[Use pre-built]
+            B --> |No| D[Custom model?]
+            D --> |Yes| E{Need custom<br/>packages?}
+            E --> |No| F[Use pre-built]
+            E --> |Yes| G{Pre-built supports<br/>requirements.txt?}
+            G --> |Yes| H[Use requirements.txt]
+            G --> |No| I[Extend pre-built]
+            D --> |No| J[Build custom container]
+        """        
+        graph = linearize_graph(graph)
+        return_value = check_graph_validity(graph)      
+        st.markdown(f"Valid graph: {return_value}")
+                
+                
+                
 #------------- COL2
 
 with col2:
+    
+    # # experimental 
+    # with st.container(border=True):
+    #     components.html(
+    #         str(st.session_state.test_html),
+    #         height=400,
+    #         scrolling=True
+    #     )
+    
     
     with st.container(border=True):
         st.subheader("Visual gist")
