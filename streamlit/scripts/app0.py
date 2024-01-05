@@ -273,6 +273,102 @@ def generate_diagram(
     return ls_diagrams
 
 
+
+
+def generate_diagram_simple(
+    url,
+    prompt,
+    kind="flowchart", # "mindmap" or "flowchart"
+    orientation="LR", # "LR" or "TD"
+    mermaid_context=True,
+    max_tokens_to_sample=500,
+    temperature=0.9,
+    top_k=250,
+    top_p=1,
+):
+
+    # setting parameters 
+    body = json.dumps(
+        {
+            "prompt": prompt, 
+            "max_tokens_to_sample": max_tokens_to_sample,
+            "temperature": temperature,
+            "top_k": top_k,
+            "top_p": top_p,
+            "stop_sequences": ["\n\nHuman:"]
+        }
+    )
+    modelId = "anthropic.claude-v2:1"
+    accept = "application/json"
+    contentType = "application/json"
+
+    # generate graph
+    st.write("Generating diagram")
+    response = st.session_state.bedrock_runtime.invoke_model(
+        body=body, 
+        modelId=modelId, 
+        accept=accept, 
+        contentType=contentType
+    )
+    response_body = json.loads(response.get("body").read())
+
+    str_mermaid_graph = find_between(
+        response_body.get("completion"), 
+        "<mermaid>", 
+        "</mermaid>"
+    )
+    
+    st.write(str_mermaid_graph)
+    
+    # graph="""
+    #  flowchart LR
+    #      A[Use Case?] --> B{Built-in algorithm?}
+    #      B --> |Yes| C[Use pre-built]
+    #      B --> |No| D[Custom model?]
+    #      D --> |Yes| E{Need custom<br/>packages?}
+    #      E --> |No| F[Use pre-built]
+    #      E --> |Yes| G{Pre-built supports<br/>requirements.txt?}
+    #      G --> |Yes| H[Use requirements.txt]
+    #      G --> |No| I[Extend pre-built]
+    #      D --> |No| J[Build custom container]
+    #  """
+    
+    graph="""
+    flowchart LR 
+
+    subgraph "Google Cloud" 
+        direction TB 
+        A["Training Data Indemnity"] 
+        B["Generated Output Indemnity"] 
+    end
+
+    subgraph "Covers"
+        direction TB 
+        C["Claims related to<br>Google's use of<br>training data"]
+        D["Claims related to<br>content generated<br>by customers"]
+    end
+
+    A --> C
+    B --> D
+
+    class A,B fill:#bbf,stroke:#333,stroke-width:2px
+    class C,D fill:#f9f,stroke:#333,stroke-width:2px
+    """
+    
+    
+    st.write("-----------")
+    st.write(graph)
+    
+    # log outputs
+    dc_output = {}
+    dc_output["raw"] = response_body.get("completion")
+    # dc_output["graph"] = str_mermaid_graph
+    dc_output["graph"] = graph
+    dc_output["standardized_graph"] = standardize_graph(str_mermaid_graph)
+
+    return dc_output
+
+
 #----------------------------------------------------------- setting up environment
 
 if 'bedrock_runtime' not in st.session_state:
@@ -283,6 +379,9 @@ if 'bedrock_runtime' not in st.session_state:
     )
 if 'webpage_title' not in st.session_state:
     st.session_state.webpage_title = ""
+    
+if 'button_pressed' not in st.session_state:
+    st.session_state.button_pressed = False
 
 if 'prompt_template' not in st.session_state:
     st.session_state.prompt_template = """\n\nHuman:              
@@ -303,18 +402,19 @@ if 'prompt_template' not in st.session_state:
     Then convert the summary to a {kind} using Mermaid notation. 
     The {kind} should capture the main gist of the summary, without too many low-level details. 
     Someone who would only view the Mermaid {kind}, should understand the gist of the summary. 
-    The Mermaid {kind} should follow all the correct notation rules and should compile without any errors.
+    The Mermaid {kind} should follow all the correct notation rules and should compile without any syntax errors.
     Use the following specifications for the generated Mermaid {kind}:
     </task>
 
     <specifications>
-    1. Use different colors and shapes (e.g. rectangle, circle, rhombus, hexagon, trapezoid, parallelogram etc.) to represent different concepts in the given text.
-    2. The orientation of the Mermaid {kind} should be {orientation}.
-    3. Any text inside parenthesis (), square brackets [], curly brackets {}, or bars ||, should be inside quotes "".
-    4. Include the Mermaid {kind} inside <mermaid> </mermaid> tags.
-    5. Do not write anything after the </mermaid> tag.
-    6. Use only information from within the given text. Don't make up new information.
-    7. Before the output, check the result for any errors. 
+    1. Use different colors, shapes (e.g. rectangle, circle, rhombus, hexagon, trapezoid, parallelogram etc.) and subgraphs to represent different concepts in the given text.
+    2. If you are using subgraphs, each subgraph should have its own indicative name within quotes.
+    3. The orientation of the Mermaid {kind} should be {orientation}.
+    4. Any text inside parenthesis (), square brackets [], curly brackets {}, or bars ||, should be inside quotes "".
+    5. Include the Mermaid {kind} inside <mermaid> </mermaid> tags.
+    6. Do not write anything after the </mermaid> tag.
+    7. Use only information from within the given text. Don't make up new information.
+    8. Before the output, check the result for any errors. 
     </specifications>
     \n\nAssistant:
     """
@@ -493,21 +593,66 @@ with col1:
     # experimental
     with st.container(border=False):
         
-        graph="""
-        flowchart LR
-            A[Use Case?] --> B{Built-in algorithm?}
-            B --> |Yes| C[Use pre-built]
-            B --> |No| D[Custom model?]
-            D --> |Yes| E{Need custom<br/>packages?}
-            E --> |No| F[Use pre-built]
-            E --> |Yes| G{Pre-built supports<br/>requirements.txt?}
-            G --> |Yes| H[Use requirements.txt]
-            G --> |No| I[Extend pre-built]
-            D --> |No| J[Build custom container]
-        """        
-        graph = linearize_graph(graph)
-        return_value = check_graph_validity(graph)      
-        st.markdown(f"Valid graph: {return_value}")
+        if st.session_state.text_url != "":
+            st.write("Sleeping...")
+            time.sleep(20)
+            
+            # graph="""
+            # flowchart LR
+            #     A[Use Case?] --> B{Built-in algorithm?}
+            #     B --> |Yes| C[Use pre-built]
+            #     B --> |No| D[Custom model?]
+            #     D --> |Yes| E{Need custom<br/>packages?}
+            #     E --> |No| F[Use pre-built]
+            #     E --> |Yes| G{Pre-built supports<br/>requirements.txt?}
+            #     G --> |Yes| H[Use requirements.txt]
+            #     G --> |No| I[Extend pre-built]
+            #     D --> |No| J[Build custom container]
+            # """
+            
+            graph="""
+            flowchart LR 
+
+            subgraph "Google Cloud" 
+                direction TB 
+                A["Training Data Indemnity"] 
+                B["Generated Output Indemnity"] 
+            end
+
+            subgraph "Covers"
+                direction TB 
+                C["Claims related to<br>Google's use of<br>training data"]
+                D["Claims related to<br>content generated<br>by customers"]
+            end
+
+            A --> C
+            B --> D
+            """
+            graph = linearize_graph(graph)
+            return_value = check_graph_validity(graph)      
+            st.markdown(f"Valid graph: {return_value}")
+
+        
+#         if st.session_state.text_url != "":
+            
+#             st.write("Generating....")
+
+#             dc_diagram = generate_diagram_simple(
+#                 url=st.session_state.text_url,
+#                 prompt=st.session_state.text_prompt,
+#                 kind=st.session_state.selectbox_kind,
+#                 orientation=st.session_state.selectbox_orientation,
+#                 mermaid_context=st.session_state.checkbox_mermaid_context,
+#                 max_tokens_to_sample=st.session_state.slider_max_tokens,
+#                 temperature=st.session_state.slider_temperature,
+#                 top_k=st.session_state.slider_top_k,
+#                 top_p=st.session_state.slider_top_p,
+#             )
+#             st.write(dc_diagram["graph"])
+#             graph = linearize_graph(dc_diagram["graph"])
+#             st.write("evaluating")
+#             return_value = check_graph_validity(graph)
+#             st.markdown(f"Valid graph: {return_value}")
                 
                 
                 
@@ -538,66 +683,69 @@ with col2:
                 disabled=button_disabled,
             ):
             
+            st.session_state.button_pressed = True
+            
+#             ls_diagrams = generate_diagram(
+#                 url=st.session_state.text_url,
+#                 prompt=st.session_state.text_prompt,
+#                 number_of_diagrams=st.session_state.input_number_of_diagrams,
+#                 kind=st.session_state.selectbox_kind,
+#                 orientation=st.session_state.selectbox_orientation,
+#                 repeat_on_error=st.session_state.checkbox_repeat,
+#                 mermaid_context=st.session_state.checkbox_mermaid_context,
+#                 max_tokens_to_sample=st.session_state.slider_max_tokens,
+#                 temperature=st.session_state.slider_temperature,
+#                 top_k=st.session_state.slider_top_k,
+#                 top_p=st.session_state.slider_top_p,
+#             )
             
             
-            ls_diagrams = generate_diagram(
-                url=st.session_state.text_url,
-                prompt=st.session_state.text_prompt,
-                number_of_diagrams=st.session_state.input_number_of_diagrams,
-                kind=st.session_state.selectbox_kind,
-                orientation=st.session_state.selectbox_orientation,
-                repeat_on_error=st.session_state.checkbox_repeat,
-                mermaid_context=st.session_state.checkbox_mermaid_context,
-                max_tokens_to_sample=st.session_state.slider_max_tokens,
-                temperature=st.session_state.slider_temperature,
-                top_k=st.session_state.slider_top_k,
-                top_p=st.session_state.slider_top_p,
-            )
-            
-            
-            for i in range(len(ls_diagrams)):
+#             for i in range(len(ls_diagrams)):
                 
-                with st.container(border=True):
-                    st.markdown("##### Visual gist " + str(i+1))
+#                 with st.container(border=True):
+#                     st.markdown("##### Visual gist " + str(i+1))
 
-                    tab_image, tab_st_graph, tab_graph, tab_raw = st.tabs(
-                        [
-                            "Image", 
-                            "Postprocessed", 
-                            "Original", 
-                            "Raw LLM output"
-                        ]
-                    )
+#                     tab_image, tab_st_graph, tab_graph, tab_raw = st.tabs(
+#                         [
+#                             "Image", 
+#                             "Postprocessed", 
+#                             "Original", 
+#                             "Raw LLM output"
+#                         ]
+#                     )
 
-                    with tab_image:
-                        # if ls_diagrams[i]["valid"] is True:
-                        st.markdown("**" + st.session_state.webpage_title + "**")
+#                     with tab_image:
+#                         # if ls_diagrams[i]["valid"] is True:
+#                         st.markdown("**" + st.session_state.webpage_title + "**")
                         
-                        html_code = f"""
-                                    <html>
-                                      <body>
-                                        <pre class="mermaid">
-                                        {ls_diagrams[i]["graph"]}
-                                        </pre>
-                                        <script type="module">
-                                          import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                                          mermaid.initialize({{ startOnLoad: true }});
-                                        </script>
-                                      </body>
-                                    </html>
-                                    """
+#                         html_code = f"""
+#                                     <html>
+#                                       <body>
+#                                         <pre class="mermaid">
+#                                         {ls_diagrams[i]["graph"]}
+#                                         </pre>
+#                                         <script type="module">
+#                                           import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+#                                           mermaid.initialize({{ startOnLoad: true }});
+#                                         </script>
+#                                       </body>
+#                                     </html>
+#                                     """
                         
-                        html_code = html_code.replace("{{", "{")
-                        html_code = html_code.replace("}}", "}")
-                        components.html(
-                            html_code,
-                            height=400,
-                            scrolling=True
-                        )
+#                         html_code = html_code.replace("{{", "{")
+#                         html_code = html_code.replace("}}", "}")
+#                         components.html(
+#                             html_code,
+#                             height=400,
+#                             scrolling=True
+#                         )
                             
-                    with tab_st_graph:
-                        st.markdown("```" + ls_diagrams[i]["standardized_graph"] + "```")
-                    with tab_graph:
-                        st.markdown("```" + ls_diagrams[i]["graph"] + "```")
-                    with tab_raw:
-                        st.markdown(ls_diagrams[i]["raw"])
+#                     with tab_st_graph:
+#                         st.markdown("```" + ls_diagrams[i]["standardized_graph"] + "```")
+#                     with tab_graph:
+#                         st.markdown("```" + ls_diagrams[i]["graph"] + "```")
+#                     with tab_raw:
+#                         st.markdown(ls_diagrams[i]["raw"])
+
+        else:
+            st.session_state.button_pressed = False

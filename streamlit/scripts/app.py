@@ -22,11 +22,12 @@ def get_html_text(url, postprocess=False, print_text=False):
     html = urlopen(request).read()
     soup = BeautifulSoup(html, features="html.parser")
     # kill all script and style elements
-    for script in soup(["script", "style"]):
+    for script in soup(["script", "style", "meta"]):
         script.extract()    # rip it out
     # get text
     text = soup.get_text()
     st.session_state.webpage_title = soup.title.text
+    
     if postprocess is True:
         # break into lines and remove leading and trailing space on each
         lines = (line.strip() for line in text.splitlines())
@@ -171,7 +172,7 @@ def standardize_graph(graph):
 
 
 
-def linearize_graph(graph):
+def serialize_graph(graph):
     
     lines = graph.splitlines()
     
@@ -247,7 +248,10 @@ def generate_diagram(
                 )
                 graph_validity = check_graph_validity(
                     str_mermaid_graph
+                    # serialize_graph(str_mermaid_graph)
                 )
+                if graph_validity is False:
+                    st.write("Probable errors...")
 
                 if repeat_on_error is True:
                     graph_error = not graph_validity
@@ -299,7 +303,7 @@ if 'prompt_template' not in st.session_state:
     Then convert the summary to a {kind} using Mermaid notation. 
     The {kind} should capture the main gist of the summary, without too many low-level details. 
     Someone who would only view the Mermaid {kind}, should understand the gist of the summary. 
-    The Mermaid {kind} should follow all the correct notation rules and should compile without any errors.
+    The Mermaid {kind} should follow all the correct notation rules and should compile without any syntax errors.
     Use the following specifications for the generated Mermaid {kind}:
     </task>
 
