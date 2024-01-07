@@ -192,6 +192,56 @@ def serialize_graph(graph):
 
 
 
+
+def display_diagram(dc_diagram, webpage_title, iteration, window_hight=500):
+    
+    with st.container(border=True):
+        st.markdown("##### Visual gist variation " + str(iteration))
+
+        tab_image, tab_st_graph, tab_graph, tab_raw = st.tabs(
+            [
+                "Image", 
+                "Postprocessed", 
+                "Original", 
+                "Raw LLM output"
+            ]
+        )
+
+        with tab_image:
+            st.markdown("**" + webpage_title + "**")
+
+            html_code = f"""
+                        <html>
+                          <body>
+                            <pre class="mermaid">
+                            {dc_diagram["graph"]}
+                            </pre>
+                            <script type="module">
+                              import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                              mermaid.initialize({{ startOnLoad: true }});
+                            </script>
+                          </body>
+                        </html>
+                        """
+
+            html_code = html_code.replace("{{", "{")
+            html_code = html_code.replace("}}", "}")
+            components.html(
+                html_code,
+                height=window_hight,
+                scrolling=True
+            )
+
+        with tab_st_graph:
+            st.markdown("```" + dc_diagram["standardized_graph"] + "```")
+        with tab_graph:
+            st.markdown("```" + dc_diagram["graph"] + "```")
+        with tab_raw:
+            st.markdown(dc_diagram["raw"])
+    
+
+
+
 def generate_diagram(
     url,
     prompt,
@@ -232,7 +282,7 @@ def generate_diagram(
             attempt = 1
             graph_error = True
             while graph_error == True:
-                st.write("Generating diagram " + str(d+1) + " out of " + str(number_of_diagrams) + " (attempt " + str(attempt) + ")")
+                st.write("Generating variation " + str(d+1) + " out of " + str(number_of_diagrams) + " (attempt " + str(attempt) + ")")
                 response = st.session_state.bedrock_runtime.invoke_model(
                     body=body, 
                     modelId=modelId, 
@@ -248,10 +298,7 @@ def generate_diagram(
                 )
                 graph_validity = check_graph_validity(
                     str_mermaid_graph
-                    # serialize_graph(str_mermaid_graph)
                 )
-                if graph_validity is False:
-                    st.write("Probable errors...")
 
                 if repeat_on_error is True:
                     graph_error = not graph_validity
@@ -268,8 +315,14 @@ def generate_diagram(
             dc_output["standardized_graph"] = standardize_graph(str_mermaid_graph)
             dc_output["valid"] = graph_validity
             ls_diagrams.append(dc_output)
-
-        status.update(label="Diagram complete!", state="complete", expanded=False)
+            
+            display_diagram(
+                dc_diagram=dc_output, 
+                webpage_title=st.session_state.webpage_title, 
+                iteration=d+1
+            )
+    
+        status.update(label="Visual gist complete!", state="complete", expanded=True)
     return ls_diagrams
 
 
@@ -401,7 +454,7 @@ with col1:
                     'Max tokens to sample',
                     min_value=1, 
                     max_value=2048, 
-                    value=500,
+                    value=1024,
                     step=1,
                     key='slider_max_tokens',
                 )
@@ -524,51 +577,3 @@ with col2:
                 top_k=st.session_state.slider_top_k,
                 top_p=st.session_state.slider_top_p,
             )
-            
-            
-            for i in range(len(ls_diagrams)):
-                
-                with st.container(border=True):
-                    st.markdown("##### Visual gist " + str(i+1))
-
-                    tab_image, tab_st_graph, tab_graph, tab_raw = st.tabs(
-                        [
-                            "Image", 
-                            "Postprocessed", 
-                            "Original", 
-                            "Raw LLM output"
-                        ]
-                    )
-
-                    with tab_image:
-                        # if ls_diagrams[i]["valid"] is True:
-                        st.markdown("**" + st.session_state.webpage_title + "**")
-                        
-                        html_code = f"""
-                                    <html>
-                                      <body>
-                                        <pre class="mermaid">
-                                        {ls_diagrams[i]["graph"]}
-                                        </pre>
-                                        <script type="module">
-                                          import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                                          mermaid.initialize({{ startOnLoad: true }});
-                                        </script>
-                                      </body>
-                                    </html>
-                                    """
-                        
-                        html_code = html_code.replace("{{", "{")
-                        html_code = html_code.replace("}}", "}")
-                        components.html(
-                            html_code,
-                            height=400,
-                            scrolling=True
-                        )
-                            
-                    with tab_st_graph:
-                        st.markdown("```" + ls_diagrams[i]["standardized_graph"] + "```")
-                    with tab_graph:
-                        st.markdown("```" + ls_diagrams[i]["graph"] + "```")
-                    with tab_raw:
-                        st.markdown(ls_diagrams[i]["raw"])
