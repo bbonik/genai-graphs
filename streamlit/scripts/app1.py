@@ -1,7 +1,7 @@
 import streamlit as st
 # import streamlit.components.v1 as components
 from mycomponent import mycomponent
-from streamlit_javascript import st_javascript
+# from streamlit_javascript import st_javascript
 from urllib.request import urlopen, Request
 from bs4 import BeautifulSoup
 import base64
@@ -81,133 +81,14 @@ def render_graph(graph, show_link=False):
 
 
 def check_graph_validity(graph):
-    
-    js_code = f'''
-    <html>
-      <body>
-        <script type="module">
-        
-          // ----------------------------------------------------
-          // Just copy/paste these functions as-is:
 
-          function sendMessageToStreamlitClient(type, data) {{
-            var outData = Object.assign({{
-              isStreamlitMessage: true,
-              type: type,
-            }}, data);
-            window.parent.postMessage(outData, "*");
-          }}
-
-          function init() {{
-            sendMessageToStreamlitClient("streamlit:componentReady", {{ apiVersion: 1 }});
-          }}
-
-          function setFrameHeight(height) {{
-            sendMessageToStreamlitClient("streamlit:setFrameHeight", {{ height: height }});
-          }}
-
-          // The `data` argument can be any JSON-serializable value.
-          function sendDataToPython(data) {{
-            sendMessageToStreamlitClient("streamlit:setComponentValue", data);
-          }}
-
-          // ----------------------------------------------------
-          // Now modify this part of the code to fit your needs:
-        
-        
-          init();
-        
-          import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
-          let textStr = "{graph}";
-          let valid = "True";
-          try{{
-            await mermaid.parse(textStr);
-          }}
-          catch(err){{
-            valid = "False";
-          }}
-          
-          
-          // Function to send error value to Streamlit
-          sendDataToPython({{
-              value: valid,
-              dataType: "json",
-            }});
-
-        </script>
-      </body>
-    </html>
-    '''
-    # js_code = js_code.replace("MERMAID_GRAPH", graph)  # substitute the mermaid graph
-    js_code = js_code.replace("{{", "{")
-    js_code = js_code.replace("}}", "}")
-    
-    st.markdown("```" + js_code)
-    
-    # out = components.html(
-    #     js_code,
-    #     height=1,
-    #     width=1,
-    # )
-    
-    
-    value = mycomponent(my_input_value="graph TB\na-->b")
-    st.write("Received", value)
+    value = mycomponent(my_input_value=graph)
+    st.write("Received back from component:", value)
     
 
     return value
 
 
-
-
-
-
-
-
-def check_graph_validity2(graph):
-    
-    js_code = f"""
-                <html>
-                  <body>
-                    <pre class="mermaid">
-                    {graph}
-                    </pre>
-                    <script type="module">
-                      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                      mermaid.initialize({{ startOnLoad: false }});
-                      
-                      let valid = "True";
-                      try{{
-                        await mermaid.run({{suppressErrors: true }})
-                      }}
-                      catch(err){{
-                        valid = "False";
-                      }}
-                      parent.window.valid = valid;
-                    </script>
-                  </body>
-                </html>
-                """
-
-    # js_code = js_code.replace("MERMAID_GRAPH", graph)  # substitute the mermaid graph
-    js_code = js_code.replace("{{", "{")
-    js_code = js_code.replace("}}", "}")
-    
-    # run the html code
-    components.html(
-        js_code,
-        height=500,
-        # width=1,
-    )
-
-    
-    while True:
-        valid = st_javascript('parent.window.valid')
-        if (valid == "True") | (valid == "False"):
-            break
-        time.sleep(5)    
-
-    return valid
 
 
     
@@ -339,8 +220,7 @@ def generate_diagram(
                     "</mermaid>"
                 )
                 graph_validity = check_graph_validity(
-                    linearize_graph(str_mermaid_graph)
-                    # str_mermaid_graph
+                    str_mermaid_graph
                 )
 
                 if repeat_on_error is True:
@@ -719,32 +599,10 @@ with col1:
 #             A --> C
 #             B --> D
 #             """
-            graph = linearize_graph(graph)
+            # graph = linearize_graph(graph)
             return_value = check_graph_validity(graph)   
-            # return_value = check_graph_validity2(graph)   
             st.markdown(f"Valid graph: {return_value}")
 
-        
-#         if st.session_state.text_url != "":
-            
-#             st.write("Generating....")
-
-#             dc_diagram = generate_diagram_simple(
-#                 url=st.session_state.text_url,
-#                 prompt=st.session_state.text_prompt,
-#                 kind=st.session_state.selectbox_kind,
-#                 orientation=st.session_state.selectbox_orientation,
-#                 mermaid_context=st.session_state.checkbox_mermaid_context,
-#                 max_tokens_to_sample=st.session_state.slider_max_tokens,
-#                 temperature=st.session_state.slider_temperature,
-#                 top_k=st.session_state.slider_top_k,
-#                 top_p=st.session_state.slider_top_p,
-#             )
-#             st.write(dc_diagram["graph"])
-#             graph = linearize_graph(dc_diagram["graph"])
-#             st.write("evaluating")
-#             return_value = check_graph_validity(graph)
-#             st.markdown(f"Valid graph: {return_value}")
                 
                 
                 

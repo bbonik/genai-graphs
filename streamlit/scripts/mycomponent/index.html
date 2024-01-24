@@ -1,0 +1,92 @@
+<html>
+  <body>
+    <script type="module">
+      // ----------------------------------------------------
+      // Just copy/paste these functions as-is:
+
+      function sendMessageToStreamlitClient(type, data) {
+        var outData = Object.assign({
+          isStreamlitMessage: true,
+          type: type,
+        }, data);
+        window.parent.postMessage(outData, "*");
+      }
+
+      function init() {
+        sendMessageToStreamlitClient("streamlit:componentReady", {apiVersion: 1});
+      }
+
+      function setFrameHeight(height) {
+        sendMessageToStreamlitClient("streamlit:setFrameHeight", {height: height});
+      }
+
+      // The `data` argument can be any JSON-serializable value.
+      function sendDataToPython(data) {
+        sendMessageToStreamlitClient("streamlit:setComponentValue", data);
+      }
+    
+
+      // ----------------------------------------------------
+      // Now modify this part of the code to fit your needs:
+
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: false });
+        
+        
+
+      async function isMermaidSyntaxValid(graphString) {
+        try {
+          await mermaid.parse(graphString);
+          return true; // Parsing successful, Mermaid syntax is valid
+        } catch (error) {
+          return error; // Parsing failed, Mermaid syntax has errors
+        }
+      }
+
+      var python_data = "none";
+
+      function onDataFromPython(event) {
+        // if (event.data.type !== "streamlit:render") return;
+          
+        if (String(python_data) !== null) {
+          if (String(python_data) != String(event.data.args.my_input_value)) {
+
+            let validGraph = isMermaidSyntaxValid(String(event.data.args.my_input_value));
+            validGraph.then(result => {
+              sendDataToPython({
+                value: String(result),
+                dataType: "json",
+              });
+            })
+          }
+        
+          python_data = String(event.data.args.my_input_value);
+        }
+        
+      }
+    
+
+      // myInput.addEventListener("change", function() {
+      //   sendDataToPython({
+      //     value: myInput.value,
+      //     dataType: "json",
+      //   });
+      // })
+
+      // Hook things up!
+      window.addEventListener("message", onDataFromPython);
+      init();
+
+      // Hack to autoset the iframe height.
+      window.addEventListener("load", function() {
+        window.setTimeout(function() {
+          setFrameHeight(document.documentElement.clientHeight)
+        }, 0);
+      });
+
+      // Optionally, if the automatic height computation fails you, give this component a height manually
+      // by commenting out below:
+      //setFrameHeight(200);
+    </script>
+  </body>
+</html>

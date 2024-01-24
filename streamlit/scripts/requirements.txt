@@ -1,6 +1,5 @@
 boto3
 Pillow
 streamlit==1.29.0
-streamlit-javascript
 beautifulsoup4
 ipython

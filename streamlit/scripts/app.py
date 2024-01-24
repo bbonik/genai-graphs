@@ -1,6 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
-from streamlit_javascript import st_javascript
+from mycomponent import mycomponent
 from urllib.request import urlopen, Request
 from bs4 import BeautifulSoup
 import base64
@@ -64,58 +64,25 @@ def render_graph(graph, show_link=False):
 
     
     
-def check_graph_validity(graph):
-    graphbytes = graph.encode("utf8")
-    base64_bytes = base64.b64encode(graphbytes)
-    base64_string = base64_bytes.decode("ascii")
-    url = "https://mermaid.ink/img/" + base64_string
-    req = Request(url, headers={'User-Agent' : "Magic Browser"})
-    flag_valid = True
-    try: 
-        con = urlopen(req)
-    except:
-        flag_valid = False
-    
-    return flag_valid
-
-
 # def check_graph_validity(graph):
-#     js_code = f'''
-#     <html>
-#       <body>
-#         <script type="module">
-#           import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
-#           let textStr = "{graph}";
-#           let valid = "True";
-#           try{{
-#             await mermaid.parse(textStr);
-#           }}
-#           catch(err){{
-#             valid = "False";
-#           }}
-#           parent.window.valid = valid;
-#         </script>
-#       </body>
-#     </html>
-#     '''
-#     # js_code = js_code.replace("MERMAID_GRAPH", graph)  # substitute the mermaid graph
-#     js_code = js_code.replace("{{", "{")
-#     js_code = js_code.replace("}}", "}")
+#     graphbytes = graph.encode("utf8")
+#     base64_bytes = base64.b64encode(graphbytes)
+#     base64_string = base64_bytes.decode("ascii")
+#     url = "https://mermaid.ink/img/" + base64_string
+#     req = Request(url, headers={'User-Agent' : "Magic Browser"})
+#     flag_valid = True
+#     try: 
+#         con = urlopen(req)
+#     except:
+#         flag_valid = False
     
-#     # run the html code
-#     components.html(
-#         js_code,
-#         height=1,
-#         width=1,
-#     )
-    
-#     while True:
-#         valid = st_javascript('parent.window.valid')
-#         if (valid == "True") | (valid == "False"):
-#             break
-#         time.sleep(5)    
+#     return flag_valid
 
-#     return valid
+
+def check_graph_validity(graph, key='check'):
+    value = mycomponent(my_input_value=graph, key=key)
+    st.write("Received back from component:", value)
+    return value
 
 
     
@@ -262,6 +229,7 @@ def generate_diagram(
     with st.status("Generating visual gist...", expanded=True) as status:
         
         ls_diagrams=[]
+        key_count = 0
 
         for d in range(number_of_diagrams):
 
@@ -284,6 +252,7 @@ def generate_diagram(
             attempt = 1
             graph_error = True
             while graph_error == True:
+                key_count += 1
                 st.write("Generating variation " + str(d+1) + " out of " + str(number_of_diagrams) + " (attempt " + str(attempt) + ")")
                 response = st.session_state.bedrock_runtime.invoke_model(
                     body=body, 
@@ -299,7 +268,8 @@ def generate_diagram(
                     "</mermaid>"
                 )
                 graph_validity = check_graph_validity(
-                    str_mermaid_graph
+                    str_mermaid_graph,
+                    key=key_count
                 )
 
                 if repeat_on_error is True:
@@ -1038,7 +1008,24 @@ with col1:
             else:
                 st.text("No webpage URL has been provided in the Parameters tab!")
 
-                
+    # experimental
+    with st.container(border=False):
+        graph="""
+        flowchart LR
+            A[Use Case?] --> B{Built-in algorithm?}
+            B --> |Yes| C[Use pre-built]
+            B --> |No| D[Custom model?]
+            D --> |Yes| E{Need custom<br/>packages?}
+            E --> |No| F[Use pre-built]
+            E --> |Yes| G{Pre-built supports<br/>requirements.txt?}
+            G --> |Yes| H[Use requirements.txt]
+            G --> |No| I[Extend pre-built]
+            D --> |No| J[Build custom container]
+        """
+        return_value = check_graph_validity(graph)   
+   
+        
+        
 #------------- COL2
 
 with col2:
