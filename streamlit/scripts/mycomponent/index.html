@@ -32,8 +32,6 @@
       import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
       mermaid.initialize({ startOnLoad: false });
         
-        
-
       async function isMermaidSyntaxValid(graphString) {
         try {
           await mermaid.parse(graphString);
@@ -48,11 +46,14 @@
       function onDataFromPython(event) {
         // if (event.data.type !== "streamlit:render") return;
           
-        if (String(python_data) !== null) {
+        // alert(event.data.args.my_input_value);
+          
+        if (event.data.args.my_input_value !== null) {
           if (String(python_data) != String(event.data.args.my_input_value)) {
 
             let validGraph = isMermaidSyntaxValid(String(event.data.args.my_input_value));
             validGraph.then(result => {
+              // alert(String(result));
               sendDataToPython({
                 value: String(result),
                 dataType: "json",

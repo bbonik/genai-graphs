@@ -64,25 +64,28 @@ def render_graph(graph, show_link=False):
 
     
     
-# def check_graph_validity(graph):
-#     graphbytes = graph.encode("utf8")
-#     base64_bytes = base64.b64encode(graphbytes)
-#     base64_string = base64_bytes.decode("ascii")
-#     url = "https://mermaid.ink/img/" + base64_string
-#     req = Request(url, headers={'User-Agent' : "Magic Browser"})
-#     flag_valid = True
-#     try: 
-#         con = urlopen(req)
-#     except:
-#         flag_valid = False
-    
-#     return flag_valid
+def check_graph_validity(graph):
+    graphbytes = graph.encode("utf8")
+    base64_bytes = base64.b64encode(graphbytes)
+    base64_string = base64_bytes.decode("ascii")
+    url = "https://mermaid.ink/img/" + base64_string
+    req = Request(url, headers={'User-Agent' : "Magic Browser"})
+    flag_valid = True
+    try: 
+        con = urlopen(req)
+    except:
+        flag_valid = False
+    return flag_valid
 
 
-def check_graph_validity(graph, key='check'):
-    value = mycomponent(my_input_value=graph, key=key)
-    st.write("Received back from component:", value)
-    return value
+# def check_graph_validity(graph, key='check'):
+#     value = mycomponent(my_input_value=graph, key=key)
+#     if value == "true":
+#         output = True
+#     else:
+#         output = False
+#     # st.write("Received back from component:", value)
+#     return output
 
 
     
@@ -269,7 +272,7 @@ def generate_diagram(
                 )
                 graph_validity = check_graph_validity(
                     str_mermaid_graph,
-                    key=key_count
+                    # key=key_count
                 )
 
                 if repeat_on_error is True:
@@ -1008,21 +1011,21 @@ with col1:
             else:
                 st.text("No webpage URL has been provided in the Parameters tab!")
 
-    # experimental
-    with st.container(border=False):
-        graph="""
-        flowchart LR
-            A[Use Case?] --> B{Built-in algorithm?}
-            B --> |Yes| C[Use pre-built]
-            B --> |No| D[Custom model?]
-            D --> |Yes| E{Need custom<br/>packages?}
-            E --> |No| F[Use pre-built]
-            E --> |Yes| G{Pre-built supports<br/>requirements.txt?}
-            G --> |Yes| H[Use requirements.txt]
-            G --> |No| I[Extend pre-built]
-            D --> |No| J[Build custom container]
-        """
-        return_value = check_graph_validity(graph)   
+    # # experimental
+    # with st.container(border=False):
+    #     graph="""
+    #     flowchart LR
+    #         A[Use Case?] --> B{Built-in algorithm?}
+    #         B --> |Yes| C[Use pre-built]
+    #         B --> |No| D[Custom model?]
+    #         D --> |Yes| E{Need custom<br/>packages?}
+    #         E --> |No| F[Use pre-built]
+    #         E --> |Yes| G{Pre-built supports<br/>requirements.txt?}
+    #         G --> |Yes| H[Use requirements.txt]
+    #         G --> |No| I[Extend pre-built]
+    #         D --> |No| J[Build custom container]
+    #     """
+    #     return_value = check_graph_validity(graph)   
    
         
         
@@ -1044,8 +1047,6 @@ with col2:
                 disabled=button_disabled,
             ):
             
-            
-            
             ls_diagrams = generate_diagram(
                 url=st.session_state.text_url,
                 prompt=st.session_state.text_prompt,
@@ -1059,3 +1060,5 @@ with col2:
                 top_k=st.session_state.slider_top_k,
                 top_p=st.session_state.slider_top_p,
             )
+                
+            
