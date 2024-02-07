@@ -171,7 +171,7 @@ def generate_diagram(
                     "stop_sequences": ["\n\nHuman:"]
                 }
             )
-            modelId = "anthropic.claude-v2:1"
+            modelId = "anthropic.claude-v2:1"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
             accept = "application/json"
             contentType = "application/json"
 
@@ -905,6 +905,10 @@ with col1:
                     #     print_text=False
                     # )
                     context_mermaid_notation = st.session_state.mermaid_context
+                else:
+                    context_mermaid_notation = ""
+                
+                # TODO: add html text in state variable. no need to load it every time
                 
                 html_text = get_html_text(
                     url=st.session_state.text_url, 
