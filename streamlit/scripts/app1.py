@@ -1,5 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
+from mycomponent import mycomponent
 from urllib.request import urlopen, Request
 from bs4 import BeautifulSoup
 import base64
@@ -51,7 +52,7 @@ def find_between( s, first, last ):
 
 def render_graph(graph, show_link=False):
     graphbytes = graph.encode("utf8")
-    base64_bytes = base64.urlsafe_b64encode(graphbytes)
+    base64_bytes = base64.b64encode(graphbytes)
     base64_string = base64_bytes.decode("ascii")
     url_rendering = "https://mermaid.ink/img/" + base64_string
     if show_link is True:
@@ -63,28 +64,104 @@ def render_graph(graph, show_link=False):
 
     
     
-def check_graph_validity(graph):
-    # checks syntax validity of a mermaid graph
-    # st.write("```" + graph)
-    graphbytes = graph.encode("utf8")
-    base64_bytes = base64.urlsafe_b64encode(graphbytes)
-    base64_string = base64_bytes.decode("ascii")
-    url = "https://mermaid.ink/img/" + base64_string
-    req = Request(url, headers={'User-Agent' : "Magic Browser"})
-    flag_valid = True
-    try: 
-        con = urlopen(req)
-    except:
-        flag_valid = False
-    return flag_valid
+# def check_graph_validity(graph):
+#     graphbytes = graph.encode("utf8")
+#     base64_bytes = base64.b64encode(graphbytes)
+#     base64_string = base64_bytes.decode("ascii")
+#     url = "https://mermaid.ink/img/" + base64_string
+#     req = Request(url, headers={'User-Agent' : "Magic Browser"})
+#     flag_valid = True
+#     try: 
+#         con = urlopen(req)
+#     except:
+#         flag_valid = False
+#     return flag_valid
+
+
+def check_graph_validity(graph, key='check'):
+
+    value = mycomponent(my_input_value=graph, key=key)
+    if value == "true":
+        output = True
+    else:
+        output = False
+    st.write("Received back from component:", value)
+    return output
 
 
     
 def standardize_graph(graph):
-    # apply string transformation to fix some common mermaid mistakes
+    # double to single
+#     graph = graph.replace("((", "(")
+#     graph = graph.replace("))", ")")
+#     graph = graph.replace("{{", "{")
+#     graph = graph.replace("}}", "}")
+#     graph = graph.replace("[[", "[")
+#     graph = graph.replace("]]", "]")
+#     graph = graph.replace("||", "|")
+    
+#     graph = graph.replace("([", "(")
+#     graph = graph.replace("])", ")")
+#     graph = graph.replace("[(", "[")
+#     graph = graph.replace(")]", "]")
+#     graph = graph.replace("({", "(")
+#     graph = graph.replace("})", ")")
+#     graph = graph.replace("{(", "{")
+#     graph = graph.replace(")}", "}")
+#     graph = graph.replace("{[", "{")
+#     graph = graph.replace("]}", "}")
+#     graph = graph.replace("[{", "[")
+#     graph = graph.replace("}]", "]")
+    
+#     # remove quotes if they exist (to be added later)
+#     graph = graph.replace('("', '(')
+#     graph = graph.replace('")', ')')
+#     graph = graph.replace('["', '[')
+#     graph = graph.replace('"]', ']')
+#     graph = graph.replace('{"', '{')
+#     graph = graph.replace('"}', '}')
+    
+#     # add quotes
+#     graph = graph.replace('(', '("')
+#     graph = graph.replace(')', '")')
+#     graph = graph.replace('[', '["')
+#     graph = graph.replace(']', '"]')
+#     graph = graph.replace('{', '{"')
+#     graph = graph.replace('}', '"}')
+    
+    # # remove spaces in arrows (to be added later)
+    # graph = graph.replace(' -->', '-->')
+    # graph = graph.replace('--> ', '-->')
+    # graph = graph.replace('-->', ' --> ')
+    
+    # remove unsafe caracters for base64 encoding
+    # graph = graph.replace('/', '')
+    # graph = graph.replace('+', '')
+    
     graph = graph.replace('subgraph ""', 'subgraph " "')
     
     return graph
+
+
+
+
+def serialize_graph(graph):
+    
+    lines = graph.splitlines()
+    
+    new_lines = []
+    for line in lines:
+        striped_line = line.strip()  # remove space before and after
+        # if len(striped_line) > 5:  # only longer lines
+        if (striped_line != "") & (striped_line != " "):
+            if striped_line[-1] != ";":
+                striped_line += ";"
+            new_lines.append(striped_line)
+    
+    graph = "".join(new_lines)  # all in one line
+    
+    return graph
+
 
 
 
@@ -104,30 +181,30 @@ def display_diagram(dc_diagram, webpage_title, iteration, window_hight=500):
         )
 
         with tab_image:
-            st.markdown("**" + webpage_title + "**")
+            if dc_diagram["processed_graph"] != "":
+                st.markdown("**" + webpage_title + "**")
 
-            html_code = f"""
-                        <html>
-                          <body>
-                            <pre class="mermaid">
-                            {dc_diagram["processed_graph"]}
-                            </pre>
-                            <script type="module">
-                              import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                              mermaid.initialize({{ startOnLoad: true }});
-                            </script>
-                          </body>
-                        </html>
-                        """
+                html_code = f"""
+                            <html>
+                              <body>
+                                <pre class="mermaid">
+                                {dc_diagram["processed_graph"]}
+                                </pre>
+                                <script type="module">
+                                  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                                  mermaid.initialize({{ startOnLoad: true }});
+                                </script>
+                              </body>
+                            </html>
+                            """
 
-            html_code = html_code.replace("{{", "{")
-            html_code = html_code.replace("}}", "}")
-            components.html(
-                html_code,
-                height=window_hight,
-                scrolling=True
-            )
-
+                html_code = html_code.replace("{{", "{")
+                html_code = html_code.replace("}}", "}")
+                components.html(
+                    html_code,
+                    height=window_hight,
+                    scrolling=True
+                )
         with tab_st_graph:
             st.markdown("```" + dc_diagram["processed_graph"] + "```")
         with tab_graph:
@@ -141,7 +218,6 @@ def display_diagram(dc_diagram, webpage_title, iteration, window_hight=500):
 def generate_diagram(
     url,
     prompt,
-    number_of_diagrams=1,
     kind="flowchart", # "mindmap" or "flowchart"
     orientation="LR", # "LR" or "TD"
     repeat_on_error=True,
@@ -151,79 +227,70 @@ def generate_diagram(
     top_k=250,
     top_p=1,
 ):
-    
-    
-    with st.status("Generating visual gist...", expanded=True) as status:
+
+    # setting parameters 
+    body = json.dumps(
+        {
+            "prompt": prompt, 
+            "max_tokens_to_sample": max_tokens_to_sample,
+            "temperature": temperature,
+            "top_k": top_k,
+            "top_p": top_p,
+            "stop_sequences": ["\n\nHuman:"]
+        }
+    )
+    modelId = "anthropic.claude-v2:1"
+    accept = "application/json"
+    contentType = "application/json"
+
+    # generate graph
+
+    response = st.session_state.bedrock_runtime.invoke_model(
+        body=body, 
+        modelId=modelId, 
+        accept=accept, 
+        contentType=contentType
+    )
+    response_body = json.loads(response.get("body").read())
+
+    str_mermaid_graph = find_between(
+        response_body.get("completion"), 
+        "<mermaid>", 
+        "</mermaid>"
+    )
+
+    # log outputs
+    dc_output = {}
+    dc_output["raw"] = response_body.get("completion")
+    dc_output["graph"] = str_mermaid_graph
+    dc_output["processed_graph"] = standardize_graph(str_mermaid_graph)
+    dc_output["valid"] = ""
+
+    return dc_output
+
+
+
+
+def input_number_of_diagrams_changed():
+    dc_output = {}
+    dc_output["raw"] = ""
+    dc_output["graph"] = ""
+    dc_output["processed_graph"] = ""
+    dc_output["valid"] = ""
+    st.session_state.ls_graphs = []
+    for i in range(st.session_state.input_number_of_diagrams):
+        st.session_state.ls_graphs.append(dc_output)
         
-        ls_diagrams=[]
-        key_count = 0
 
-        for d in range(number_of_diagrams):
+def text_url_changed():
+    if (st.session_state.text_url != "") & (st.session_state.text_url != " ") & (st.session_state.remaining_graphs == 0):
+        st.session_state.button_generate_disabled = False
 
-            # setting parameters 
-            body = json.dumps(
-                {
-                    "prompt": prompt, 
-                    "max_tokens_to_sample": max_tokens_to_sample,
-                    "temperature": temperature,
-                    "top_k": top_k,
-                    "top_p": top_p,
-                    "stop_sequences": ["\n\nHuman:"]
-                }
-            )
-            modelId = "anthropic.claude-v2:1"
-            accept = "application/json"
-            contentType = "application/json"
 
-            # generate graph
-            attempt = 1
-            graph_error = True
-            while graph_error == True:
-                key_count += 1
-                st.write("Generating variation " + str(d+1) + " out of " + str(number_of_diagrams) + " (attempt " + str(attempt) + ")")
-                response = st.session_state.bedrock_runtime.invoke_model(
-                    body=body, 
-                    modelId=modelId, 
-                    accept=accept, 
-                    contentType=contentType
-                )
-                response_body = json.loads(response.get("body").read())
-
-                str_mermaid_graph = find_between(
-                    response_body.get("completion"), 
-                    "<mermaid>", 
-                    "</mermaid>"
-                )
-                graph_validity = check_graph_validity(
-                    standardize_graph(str_mermaid_graph),
-                )
-
-                if repeat_on_error is True:
-                    graph_error = not graph_validity
-                    attempt += 1
-                    if graph_error is True:
-                        st.write("Graph has errors! Reattempting...")
-                else:
-                    graph_error = False
-
-            # log outputs
-            dc_output = {}
-            dc_output["raw"] = response_body.get("completion")
-            dc_output["graph"] = str_mermaid_graph
-            dc_output["processed_graph"] = standardize_graph(str_mermaid_graph)
-            dc_output["valid"] = graph_validity
-            ls_diagrams.append(dc_output)
-            
-            display_diagram(
-                dc_diagram=dc_output, 
-                webpage_title=st.session_state.webpage_title, 
-                iteration=d+1
-            )
+def button_generate_clicked():
+    st.session_state.remaining_graphs = st.session_state.input_number_of_diagrams
+    st.session_state.button_generate_disabled = True
     
-        status.update(label="Visual gist complete!", state="complete", expanded=True)
-    return ls_diagrams
-
-
 #----------------------------------------------------------- setting up environment
 
 if 'bedrock_runtime' not in st.session_state:
@@ -232,8 +299,26 @@ if 'bedrock_runtime' not in st.session_state:
         region = os.environ.get("AWS_DEFAULT_REGION", None),
         runtime = True
     )
+    
 if 'webpage_title' not in st.session_state:
     st.session_state.webpage_title = ""
+    
+if 'redrawns' not in st.session_state:
+    st.session_state.redrawns = 0
+
+if 'ls_graphs' not in st.session_state:
+    dc_output = {}
+    dc_output["raw"] = ""
+    dc_output["graph"] = ""
+    dc_output["processed_graph"] = ""
+    dc_output["valid"] = ""
+    st.session_state.ls_graphs = [dc_output]
+    
+if 'remaining_graphs' not in st.session_state:
+    st.session_state.remaining_graphs = 0
+    
+if 'button_generate_disabled' not in st.session_state:
+    st.session_state.button_generate_disabled = True
 
 if 'prompt_template' not in st.session_state:
     st.session_state.prompt_template = """\n\nHuman:              
@@ -797,7 +882,8 @@ with col1:
             st.text_input(
                 label='Webpage URL', 
                 key='text_url',
-                placeholder='Paste the URL of a webpage which you want to generate a visual gist diagram'
+                placeholder='Paste the URL of a webpage which you want to generate a visual gist diagram',
+                on_change=text_url_changed
             )
 
             with st.container(border=True):
@@ -811,7 +897,8 @@ with col1:
                         min_value=1,
                         max_value=10,
                         step=1,
-                        value=1
+                        value=1,
+                        on_change=input_number_of_diagrams_changed
                     )
                     st.checkbox(
                         'Repeat on error',
@@ -905,7 +992,10 @@ with col1:
                     #     print_text=False
                     # )
                     context_mermaid_notation = st.session_state.mermaid_context
+                else:
+                    context_mermaid_notation = ""
                 
+                # TODO: add html text in state variable. no need to load it every time
                 html_text = get_html_text(
                     url=st.session_state.text_url, 
                     postprocess=False, 
@@ -933,6 +1023,24 @@ with col1:
                 )
             else:
                 st.text("No webpage URL has been provided in the Parameters tab!")
+                
+                
+                
+        # # experimental
+        # with st.container(border=False):
+        #     graph="""
+        #     flowchart LR
+        #         A[Use Case?] --> B{Built-in algorithm?}
+        #         B --> |Yes| C[Use pre-built]
+        #         B --> |No| D[Custom model?]
+        #         D --> |Yes| E{Need custom<br/>packages?}
+        #         E --> |No| F[Use pre-built]
+        #         E --> |Yes| G{Pre-built supports<br/>requirements.txt?}
+        #         G --> |Yes| H[Use requirements.txt]
+        #         G --> |No| I[Extend pre-built]
+        #         D --> |No| J[Build custom container]
+        #     """
+        #     return_value = check_graph_validity(graph) 
 
         
 #------------- COL2
@@ -941,30 +1049,59 @@ with col2:
     
     with st.container(border=True):
         st.subheader("Visual gist")
+        
 
-        if st.session_state.text_url == "":
-            button_disabled = True
-        else:
-            button_disabled = False
+        st.button(
+            label='Generate visual gist',
+            key='button_generate',
+            disabled=st.session_state.button_generate_disabled,
+            on_click=button_generate_clicked
+        )
 
-        if st.button(
-                label='Generate visual gist',
-                key='button_generate',
-                disabled=button_disabled,
-            ):
+        if st.session_state.remaining_graphs > 0:
             
-            ls_diagrams = generate_diagram(
-                url=st.session_state.text_url,
-                prompt=st.session_state.text_prompt,
-                number_of_diagrams=st.session_state.input_number_of_diagrams,
-                kind=st.session_state.selectbox_kind,
-                orientation=st.session_state.selectbox_orientation,
-                repeat_on_error=st.session_state.checkbox_repeat,
-                mermaid_context=st.session_state.checkbox_mermaid_context,
-                max_tokens_to_sample=st.session_state.slider_max_tokens,
-                temperature=st.session_state.slider_temperature,
-                top_k=st.session_state.slider_top_k,
-                top_p=st.session_state.slider_top_p,
+            
+            i = len(st.session_state.ls_graphs) - st.session_state.remaining_graphs
+            graph_validity = st.session_state.ls_graphs[i]["valid"]
+            st.write("Generating graph " + str(i+1))
+            
+            if graph_validity is not None:
+                dc_output = generate_diagram(
+                    url=st.session_state.text_url,
+                    prompt=st.session_state.text_prompt,
+                    kind=st.session_state.selectbox_kind,
+                    orientation=st.session_state.selectbox_orientation,
+                    repeat_on_error=st.session_state.checkbox_repeat,
+                    mermaid_context=st.session_state.checkbox_mermaid_context,
+                    max_tokens_to_sample=st.session_state.slider_max_tokens,
+                    temperature=st.session_state.slider_temperature,
+                    top_k=st.session_state.slider_top_k,
+                    top_p=st.session_state.slider_top_p,
+                )
+            
+            st.session_state.ls_graphs[i]["valid"] = check_graph_validity(
+                dc_output["processed_graph"]
+            )
+            graph_validity = st.session_state.ls_graphs[i]["valid"]
+            
+            if graph_validity is not None:
+                
+                if ((st.session_state.checkbox_repeat is False) | (graph_validity is True)):
+                    i = len(st.session_state.ls_graphs) - st.session_state.remaining_graphs
+                    st.session_state.ls_graphs[i] = dc_output
+                    st.session_state.remaining_graphs -= 1
+                    if st.session_state.remaining_graphs == 0:
+                        st.session_state.button_generate_disabled = False
+                else:
+                    st.write("Graph " + str(i+1) + " has issues!")
+                
+            
+        for n in range(st.session_state.input_number_of_diagrams):
+
+            display_diagram(
+                dc_diagram=st.session_state.ls_graphs[n], 
+                webpage_title=st.session_state.webpage_title, 
+                iteration=n+1
             )
                 
             
