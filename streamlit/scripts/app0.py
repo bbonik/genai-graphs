@@ -6,7 +6,6 @@ import base64
 import bedrock
 import time
 import os
-import re
 import json
 import numpy as np
 from IPython.display import Image
@@ -42,25 +41,13 @@ def get_html_text(url, postprocess=False, print_text=False):
 
 
 # parsing completion
-# def find_between( s, first, last ):
-#     try:
-#         start = s.index( first ) + len( first )
-#         end = s.index( last, start )
-#         return s[start:end]
-#     except ValueError:
-#         return ""
-    
-    
-    
 def find_between( s, first, last ):
     try:
-        ls_graphs = re.findall(r'<mermaid>(.*?)</mermaid>', s, re.DOTALL)
-        return ls_graphs
+        start = s.index( first ) + len( first )
+        end = s.index( last, start )
+        return s[start:end]
     except ValueError:
         return ""
-    
-    
-    
 
 def render_graph(graph, show_link=False):
     graphbytes = graph.encode("utf8")
@@ -171,43 +158,54 @@ def generate_diagram(
         ls_diagrams=[]
         key_count = 0
 
+        for d in range(number_of_diagrams):
 
-        # setting parameters 
-        body = json.dumps(
-            {
-                "prompt": prompt, 
-                "max_tokens_to_sample": max_tokens_to_sample,
-                "temperature": temperature,
-                "top_k": top_k,
-                "top_p": top_p,
-                "stop_sequences": ["\n\nHuman:"]
-            }
-        )
-        modelId = "anthropic.claude-v2:1"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
-        accept = "application/json"
-        contentType = "application/json"
+            # setting parameters 
+            body = json.dumps(
+                {
+                    "prompt": prompt, 
+                    "max_tokens_to_sample": max_tokens_to_sample,
+                    "temperature": temperature,
+                    "top_k": top_k,
+                    "top_p": top_p,
+                    "stop_sequences": ["\n\nHuman:"]
+                }
+            )
+            modelId = "anthropic.claude-v2:1"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+            accept = "application/json"
+            contentType = "application/json"
 
-        # generate graph
+            # generate graph
+            attempt = 1
+            graph_error = True
+            while graph_error == True:
+                key_count += 1
+                st.write("Generating variation " + str(d+1) + " out of " + str(number_of_diagrams) + " (attempt " + str(attempt) + ")")
+                response = st.session_state.bedrock_runtime.invoke_model(
+                    body=body, 
+                    modelId=modelId, 
+                    accept=accept, 
+                    contentType=contentType
+                )
+                response_body = json.loads(response.get("body").read())
 
-        response = st.session_state.bedrock_runtime.invoke_model(
-            body=body, 
-            modelId=modelId, 
-            accept=accept, 
-            contentType=contentType
-        )
-        response_body = json.loads(response.get("body").read())
-
-        ls_str_mermaid_graph = find_between(
-            response_body.get("completion"), 
-            "<mermaid>", 
-            "</mermaid>"
-        )
-
-        for d,str_mermaid_graph in enumerate(ls_str_mermaid_graph):
-            
-            graph_validity = check_graph_validity(
+                str_mermaid_graph = find_between(
+                    response_body.get("completion"), 
+                    "<mermaid>", 
+                    "</mermaid>"
+                )
+                graph_validity = check_graph_validity(
                     standardize_graph(str_mermaid_graph),
                 )
+
+                if repeat_on_error is True:
+                    graph_error = not graph_validity
+                    attempt += 1
+                    if graph_error is True:
+                        st.write("Graph has errors! Reattempting...")
+                else:
+                    graph_error = False
+
             # log outputs
             dc_output = {}
             dc_output["raw"] = response_body.get("completion")
@@ -215,7 +213,7 @@ def generate_diagram(
             dc_output["processed_graph"] = standardize_graph(str_mermaid_graph)
             dc_output["valid"] = graph_validity
             ls_diagrams.append(dc_output)
-
+            
             display_diagram(
                 dc_diagram=dc_output, 
                 webpage_title=st.session_state.webpage_title, 
@@ -253,20 +251,22 @@ if 'prompt_template' not in st.session_state:
 
     <task>
     Summarize the given text and provide the summary inside <summary> tags. 
-    Then convert the summary to {how_many} {kind}s using Mermaid notation. 
+    Then convert the summary to a {kind} using Mermaid notation. 
     The {kind} should capture the main gist of the summary, without too many low-level details. 
-    Someone who would only view the Mermaid {kind}s, should understand the gist of the summary. 
-    The Mermaid {kind}s should follow all the correct notation rules and should compile without any syntax errors.
-    Use the following specifications for the generated Mermaid {kind}s:
+    Someone who would only view the Mermaid {kind}, should understand the gist of the summary. 
+    The Mermaid {kind} should follow all the correct notation rules and should compile without any syntax errors.
+    Use the following specifications for the generated Mermaid {kind}:
     </task>
 
     <specifications>
     1. Use different colors, node shapes (e.g. rectangle, circle, rhombus, hexagon, trapezoid, parallelogram etc.), and subgraphs to represent different concepts in the given text.
     2. If you are using subgraphs, each subgraph should have its own indicative name inside quotes. 
     3. Use "links with text" to indicate actions, relationships or influence between a source nodes and destination nodes.
-    4. The orientation of each of the {how_many} Mermaid {kind}s should be {orientation}.
-    5. Include each of the {how_many} Mermaid {kind}s inside <mermaid> </mermaid> tags.
-    6. Use only information from within the given text. Don't make up new information.
+    4. The orientation of the Mermaid {kind}s should be {orientation}.
+    5. Include the Mermaid {kind} inside <mermaid> </mermaid> tags.
+    6. Do not write anything after the </mermaid> tag.
+    7. Use only information from within the given text. Don't make up new information.
+    8. Before the output, check the result for any errors. 
     </specifications>
     \n\nAssistant:
     """
@@ -897,7 +897,6 @@ with col1:
 
                 kind = st.session_state.selectbox_kind
                 orientation = st.session_state.selectbox_orientation
-                number_of_diagrams = st.session_state.input_number_of_diagrams
                 
                 if st.session_state.checkbox_mermaid_context is True:
                     # context_mermaid_notation = get_html_text(
@@ -928,7 +927,6 @@ with col1:
                 prompt = prompt.replace("{html_text}", html_text)
                 prompt = prompt.replace("{kind}", kind)
                 prompt = prompt.replace("{orientation}", orientation)
-                prompt = prompt.replace("{how_many}", str(number_of_diagrams))
                 
             
                 st.text_area(
