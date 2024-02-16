@@ -6,7 +6,6 @@ import base64
 import bedrock
 import time
 import os
-import re
 import json
 import numpy as np
 from IPython.display import Image
@@ -42,25 +41,13 @@ def get_html_text(url, postprocess=False, print_text=False):
 
 
 # parsing completion
-# def find_between( s, first, last ):
-#     try:
-#         start = s.index( first ) + len( first )
-#         end = s.index( last, start )
-#         return s[start:end]
-#     except ValueError:
-#         return ""
-    
-    
-    
 def find_between( s, first, last ):
     try:
-        ls_graphs = re.findall(r'<mermaid>(.*?)</mermaid>', s, re.DOTALL)
-        return ls_graphs
+        start = s.index( first ) + len( first )
+        end = s.index( last, start )
+        return s[start:end]
     except ValueError:
         return ""
-    
-    
-    
 
 def render_graph(graph, show_link=False):
     graphbytes = graph.encode("utf8")
@@ -164,50 +151,61 @@ def generate_diagram(
     top_k=250,
     top_p=1,
 ):
-    
+    start_time = time.time()
     
     with st.status("Generating visual gist...", expanded=True) as status:
         
         ls_diagrams=[]
         key_count = 0
 
+        for d in range(number_of_diagrams):
 
-        # setting parameters 
-        body = json.dumps(
-            {
-                "prompt": prompt, 
-                "max_tokens_to_sample": max_tokens_to_sample,
-                "temperature": temperature,
-                "top_k": top_k,
-                "top_p": top_p,
-                "stop_sequences": ["\n\nHuman:"]
-            }
-        )
-        modelId = "anthropic.claude-v2:1"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
-        accept = "application/json"
-        contentType = "application/json"
+            # setting parameters 
+            body = json.dumps(
+                {
+                    "prompt": prompt, 
+                    "max_tokens_to_sample": max_tokens_to_sample,
+                    "temperature": temperature,
+                    "top_k": top_k,
+                    "top_p": top_p,
+                    "stop_sequences": ["\n\nHuman:"]
+                }
+            )
+            modelId = "anthropic.claude-v2:1"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+            accept = "application/json"
+            contentType = "application/json"
 
-        # generate graph
+            # generate graph
+            attempt = 1
+            graph_error = True
+            while graph_error == True:
+                key_count += 1
+                st.write("Generating variation " + str(d+1) + " out of " + str(number_of_diagrams) + " (attempt " + str(attempt) + ")")
+                response = st.session_state.bedrock_runtime.invoke_model(
+                    body=body, 
+                    modelId=modelId, 
+                    accept=accept, 
+                    contentType=contentType
+                )
+                response_body = json.loads(response.get("body").read())
 
-        response = st.session_state.bedrock_runtime.invoke_model(
-            body=body, 
-            modelId=modelId, 
-            accept=accept, 
-            contentType=contentType
-        )
-        response_body = json.loads(response.get("body").read())
-
-        ls_str_mermaid_graph = find_between(
-            response_body.get("completion"), 
-            "<mermaid>", 
-            "</mermaid>"
-        )
-
-        for d,str_mermaid_graph in enumerate(ls_str_mermaid_graph):
-            
-            graph_validity = check_graph_validity(
+                str_mermaid_graph = find_between(
+                    response_body.get("completion"), 
+                    "<mermaid>", 
+                    "</mermaid>"
+                )
+                graph_validity = check_graph_validity(
                     standardize_graph(str_mermaid_graph),
                 )
+
+                if repeat_on_error is True:
+                    graph_error = not graph_validity
+                    attempt += 1
+                    if graph_error is True:
+                        st.write("Graph has errors! Reattempting...")
+                else:
+                    graph_error = False
+
             # log outputs
             dc_output = {}
             dc_output["raw"] = response_body.get("completion")
@@ -215,16 +213,36 @@ def generate_diagram(
             dc_output["processed_graph"] = standardize_graph(str_mermaid_graph)
             dc_output["valid"] = graph_validity
             ls_diagrams.append(dc_output)
-
+            
             display_diagram(
                 dc_diagram=dc_output, 
                 webpage_title=st.session_state.webpage_title, 
                 iteration=d+1
             )
     
-        status.update(label="Visual gist complete!", state="complete", expanded=True)
+        duration = time.time() - start_time
+        status.update(
+            label="Visual gist completed! (in " + str(round(duration,1)) + " sec)", 
+            state="complete", 
+            expanded=True
+        )
     return ls_diagrams
 
+
+def text_url_changed():
+    if st.session_state.text_url != "":
+        try:
+            html_text = get_html_text(
+                st.session_state.text_url, 
+                postprocess=False, 
+                print_text=False
+            )
+        except Exception as e:
+            html_text = ""
+        st.session_state.text_content = html_text
+        
+    else:
+        st.session_state.text_content = None
 
 #----------------------------------------------------------- setting up environment
 
@@ -236,6 +254,9 @@ if 'bedrock_runtime' not in st.session_state:
     )
 if 'webpage_title' not in st.session_state:
     st.session_state.webpage_title = ""
+    
+if 'text_content' not in st.session_state:
+    st.session_state.text_content = None  
 
 if 'prompt_template' not in st.session_state:
     st.session_state.prompt_template = """\n\nHuman:              
@@ -253,20 +274,22 @@ if 'prompt_template' not in st.session_state:
 
     <task>
     Summarize the given text and provide the summary inside <summary> tags. 
-    Then convert the summary to {how_many} {kind}s using Mermaid notation. 
+    Then convert the summary to a {kind} using Mermaid notation. 
     The {kind} should capture the main gist of the summary, without too many low-level details. 
-    Someone who would only view the Mermaid {kind}s, should understand the gist of the summary. 
-    The Mermaid {kind}s should follow all the correct notation rules and should compile without any syntax errors.
-    Use the following specifications for the generated Mermaid {kind}s:
+    Someone who would only view the Mermaid {kind}, should understand the gist of the summary. 
+    The Mermaid {kind} should follow all the correct notation rules and should compile without any syntax errors.
+    Use the following specifications for the generated Mermaid {kind}:
     </task>
 
     <specifications>
     1. Use different colors, node shapes (e.g. rectangle, circle, rhombus, hexagon, trapezoid, parallelogram etc.), and subgraphs to represent different concepts in the given text.
     2. If you are using subgraphs, each subgraph should have its own indicative name inside quotes. 
     3. Use "links with text" to indicate actions, relationships or influence between a source nodes and destination nodes.
-    4. The orientation of each of the {how_many} Mermaid {kind}s should be {orientation}.
-    5. Include each of the {how_many} Mermaid {kind}s inside <mermaid> </mermaid> tags.
-    6. Use only information from within the given text. Don't make up new information.
+    4. The orientation of the Mermaid {kind}s should be {orientation}.
+    5. Include the Mermaid {kind} inside <mermaid> </mermaid> tags.
+    6. Do not write anything after the </mermaid> tag.
+    7. Use only information from within the given text. Don't make up new information.
+    8. Before the output, check the result for any errors. 
     </specifications>
     \n\nAssistant:
     """
@@ -797,7 +820,8 @@ with col1:
             st.text_input(
                 label='Webpage URL', 
                 key='text_url',
-                placeholder='Paste the URL of a webpage which you want to generate a visual gist diagram'
+                placeholder='Paste the URL of a webpage which you want to generate a visual gist diagram',
+                on_change=text_url_changed
             )
 
             with st.container(border=True):
@@ -874,30 +898,24 @@ with col1:
                 )
                 
         with tab_webpage_text:
-            if st.session_state.text_url != "":
-                try:
-                    html_text = get_html_text(
-                        st.session_state.text_url, 
-                        postprocess=False, 
-                        print_text=False
-                    )
-                    st.markdown(html_text)
-                except Exception as e:
-                    st.markdown("There was a problem accessing the webpage!")
-                    st.markdown(str(e))
-            else:
+            if st.session_state.text_content is None:
                 st.markdown("No webpage URL has been provided in the Parameters tab!") 
+            elif st.session_state.text_content == "":
+                st.markdown("There was a problem extracting text from the webpage!")
+            else:
+                st.markdown(st.session_state.text_content) 
         
         with tab_prompt_template:
             st.text(st.session_state.prompt_template)
 
         with tab_prompt:
-
-            if st.session_state.text_url != "":
-
+            if st.session_state.text_content is None:
+                st.markdown("No webpage URL has been provided in the Parameters tab!") 
+            elif st.session_state.text_content == "":
+                st.markdown("There was a problem extracting text from the webpage!")
+            else:
                 kind = st.session_state.selectbox_kind
                 orientation = st.session_state.selectbox_orientation
-                number_of_diagrams = st.session_state.input_number_of_diagrams
                 
                 if st.session_state.checkbox_mermaid_context is True:
                     # context_mermaid_notation = get_html_text(
@@ -908,15 +926,7 @@ with col1:
                     context_mermaid_notation = st.session_state.mermaid_context
                 else:
                     context_mermaid_notation = ""
-                
-                # TODO: add html text in state variable. no need to load it every time
-                
-                html_text = get_html_text(
-                    url=st.session_state.text_url, 
-                    postprocess=False, 
-                    print_text=False
-                )
-                
+ 
                 # preparing prompt
                 prompt = st.session_state.prompt_template  # start from prompt template
                 if st.session_state.checkbox_mermaid_context is False:
@@ -925,20 +935,16 @@ with col1:
                         ""
                     )
                 prompt = prompt.replace("{context_mermaid_notation}", context_mermaid_notation)
-                prompt = prompt.replace("{html_text}", html_text)
+                prompt = prompt.replace("{html_text}", st.session_state.text_content)
                 prompt = prompt.replace("{kind}", kind)
                 prompt = prompt.replace("{orientation}", orientation)
-                prompt = prompt.replace("{how_many}", str(number_of_diagrams))
                 
-            
                 st.text_area(
                     label="Customize the prompt as needed:",
                     value=prompt,
                     key="text_prompt",
                     height=600
                 )
-            else:
-                st.text("No webpage URL has been provided in the Parameters tab!")
 
         
 #------------- COL2
@@ -948,7 +954,7 @@ with col2:
     with st.container(border=True):
         st.subheader("Visual gist")
 
-        if st.session_state.text_url == "":
+        if (st.session_state.text_content is None) | (st.session_state.text_content == ""):
             button_disabled = True
         else:
             button_disabled = False
