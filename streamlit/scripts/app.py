@@ -104,6 +104,89 @@ def standardize_graph(graph):
 
 
 
+def display_variants(
+        ls_valid_diagrams,
+        indx_best_diagram,
+        raw_selection_output,
+        webpage_title, 
+        window_hight=500
+    ):
+
+    ls_other_variants = [ls_valid_diagrams[i] for i in range(len(ls_valid_diagrams)) if i != indx_best_diagram]  # without best digram
+
+    with st.container(border=True):
+
+        ls_tabs = [
+                "Visual gist", 
+                "Mermaid code", 
+                "Raw variants",
+                "Raw selection",
+            ]
+        for i in range(len(ls_valid_diagrams) - 1):
+            ls_tabs.append("Variant " + str(i+1))
+            
+        
+        for i,current_tab in enumerate(st.tabs(ls_tabs)):
+            with current_tab:
+                
+                if i == 0:  # display selected variant
+                    st.markdown("**" + webpage_title + "**")
+                    html_code = f"""
+                                <html>
+                                  <body>
+                                    <pre class="mermaid">
+                                    {ls_valid_diagrams[indx_best_diagram]["processed_graph"]}
+                                    </pre>
+                                    <script type="module">
+                                      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                                      mermaid.initialize({{ startOnLoad: true }});
+                                    </script>
+                                  </body>
+                                </html>
+                                """
+                    html_code = html_code.replace("{{", "{")
+                    html_code = html_code.replace("}}", "}")
+                    components.html(
+                        html_code,
+                        height=window_hight,
+                        scrolling=True
+                    )
+                    
+                if i == 1:  # mermaid code
+                    st.markdown("```" + ls_valid_diagrams[indx_best_diagram]["processed_graph"] + "```")
+                    
+                if i == 2:  # raw llm variant outputs
+                    st.markdown(ls_valid_diagrams[indx_best_diagram]["raw"])
+                    
+                if i == 3:  # raw llm selection output
+                    st.markdown(raw_selection_output)
+                
+                if i > 3:  # raw llm selection output
+                    html_code = f"""
+                                <html>
+                                  <body>
+                                    <pre class="mermaid">
+                                    {ls_other_variants[0]["processed_graph"]}
+                                    </pre>
+                                    <script type="module">
+                                      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                                      mermaid.initialize({{ startOnLoad: true }});
+                                    </script>
+                                  </body>
+                                </html>
+                                """
+                    html_code = html_code.replace("{{", "{")
+                    html_code = html_code.replace("}}", "}")
+                    components.html(
+                        html_code,
+                        height=window_hight,
+                        scrolling=True,
+                    )
+                    # st.write(ls_other_variants[0]["processed_graph"])
+                    del ls_other_variants[0]
+
+
+
 
 def display_diagram(dc_diagram, webpage_title, iteration, window_hight=500):
     
@@ -174,8 +257,7 @@ def select_diagram(
     The candidate Mermaid diagrams are included inside XML tags, along with their corresponding index number. 
     The most informative Mermaid diagram should capture the main gist of the text. 
     Someone who would only view the Mermaid diagram, should understand the main concepts of the text, without having to read it.
-    Select the index of the most informative Mermaid diagram.
-    </task>
+    Select the index of the most informative Mermaid diagram and provide it inside <selected_index></selected_index> XML tags.
     """
     
     for i,diagram in enumerate(ls_diagrams):
@@ -210,7 +292,18 @@ def select_diagram(
     )
     response_body = json.loads(response.get("body").read())
     
-    st.write(response_body.get("completion"))
+    indx_selected = re.findall(
+        r"<selected_index>(.*?)</selected_index>", 
+        response_body.get("completion"), 
+        re.DOTALL
+    )
+    indx_selected = int(indx_selected[0])
+
+    
+    
+    dc_output = {'indx_selected': indx_selected, 'raw_output': response_body.get("completion")}
+
+    return dc_output
 
     
     
@@ -233,7 +326,7 @@ def generate_diagram(
     
     start_time = time.time()
     
-    with st.status("Generating visual gist...", expanded=True) as status:
+    with st.status("Generating " + str(number_of_diagrams) + " visual gist variants...", expanded=True) as status:
         
         ls_diagrams = []
         ls_valid_indx = []
@@ -255,8 +348,7 @@ def generate_diagram(
         accept = "application/json"
         contentType = "application/json"
 
-        # generate graph
-
+        # generate graphs
         response = st.session_state.bedrock_runtime.invoke_model(
             body=body, 
             modelId=modelId, 
@@ -287,19 +379,24 @@ def generate_diagram(
             dc_output["valid"] = graph_validity
             ls_diagrams.append(dc_output)
 
-            display_diagram(
-                dc_diagram=dc_output, 
-                webpage_title=st.session_state.webpage_title, 
-                iteration=d+1
-            )
+            # display_diagram(
+            #     dc_diagram=dc_output, 
+            #     webpage_title=st.session_state.webpage_title, 
+            #     iteration=d+1
+            # )
+        
+        status.update(label="Selecting the best among " + str(str(len(ls_valid_indx))) + " valid variants...", expanded=True)
+        
+        ls_valid_diagrams = [ls_diagrams[i] for i in ls_valid_indx]
+        dc_selection = select_diagram(ls_valid_diagrams)
         
         
-        status.update(label=str(len(ls_valid_indx)) + " usable Visual Gist(s)...", expanded=True)
-                      
-        status.update(label="Selecting the best Visual Gist among the valid ones...", expanded=True)
-        
-        indx_best_diagram = select_diagram([ls_diagrams[i] for i in ls_valid_indx])
-        
+        display_variants(
+            ls_valid_diagrams = ls_valid_diagrams,
+            indx_best_diagram = dc_selection["indx_selected"],
+            raw_selection_output = dc_selection["raw_output"],
+            webpage_title=st.session_state.webpage_title, 
+        )
         
         duration = time.time() - start_time
         status.update(label="Visual gist completed! (in " + str(round(duration,1)) + " sec)", state="complete", expanded=True)
@@ -353,19 +450,19 @@ if 'prompt_template' not in st.session_state:
 
     <task>
     Summarize the given text and provide the summary inside <summary> tags. 
-    Then convert the summary to {how_many} {kind}s using Mermaid notation. 
-    The {kind} should capture the main gist of the summary, without too many low-level details. 
-    Someone who would only view the Mermaid {kind}s, should understand the gist of the summary. 
-    The Mermaid {kind}s should follow all the correct notation rules and should compile without any syntax errors.
-    Use the following specifications for the generated Mermaid {kind}s:
+    Then convert the summary to {how_many} diagrams using Mermaid notation. 
+    All Mermaid diagrams should capture the main gist of the summary. 
+    Someone who would only view the Mermaid diagrams, should understand the gist of the summary. 
+    The Mermaid diagrams should follow all the correct notation rules and should compile without any syntax errors.
+    Use the following specifications for the generated Mermaid diagrams:
     </task>
 
     <specifications>
     1. Use different colors, node shapes (e.g. rectangle, circle, rhombus, hexagon, trapezoid, parallelogram etc.), and subgraphs to represent different concepts in the given text.
     2. If you are using subgraphs, each subgraph should have its own indicative name inside quotes. 
     3. Use "links with text" to indicate actions, relationships or influence between a source nodes and destination nodes.
-    4. The orientation of each of the {how_many} Mermaid {kind}s should be {orientation}.
-    5. Include each of the {how_many} Mermaid {kind}s inside <mermaid> </mermaid> tags.
+    4. The orientation of each of the {how_many} Mermaid diagrams should be {orientation}.
+    5. Include each of the {how_many} Mermaid diagrams inside <mermaid> </mermaid> tags.
     6. Use only information from within the given text. Don't make up new information.
     </specifications>
     \n\nAssistant:
@@ -927,9 +1024,9 @@ with col1:
                 
                 with col1:
                     st.selectbox(
-                        label='Type of diagram', 
+                        label='Technique', 
                         key='selectbox_kind',
-                        options=('flowchart', 'mindmap'),
+                        options=('Generate variants & select', 'Generate only'),
                         index=0
                     )
                     st.selectbox(
@@ -991,7 +1088,6 @@ with col1:
             elif st.session_state.text_content == "":
                 st.markdown("There was a problem extracting text from the webpage!")
             else:
-                kind = st.session_state.selectbox_kind
                 orientation = st.session_state.selectbox_orientation
                 number_of_diagrams = st.session_state.input_number_of_diagrams
                 
@@ -1014,7 +1110,6 @@ with col1:
                     )
                 prompt = prompt.replace("{context_mermaid_notation}", context_mermaid_notation)
                 prompt = prompt.replace("{html_text}", st.session_state.text_content)
-                prompt = prompt.replace("{kind}", kind)
                 prompt = prompt.replace("{orientation}", orientation)
                 prompt = prompt.replace("{how_many}", str(number_of_diagrams))
                 
