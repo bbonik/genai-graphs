@@ -118,6 +118,7 @@ def display_variants(
 
         ls_tabs = [
                 "Visual gist", 
+                "Summary",
                 "Mermaid code", 
                 "Raw variants",
                 "Raw selection",
@@ -151,17 +152,25 @@ def display_variants(
                         height=window_hight,
                         scrolling=True
                     )
+                
+                if i == 1:  # text summary
+                    summary = indx_selected = re.findall(
+                        r"<summary>(.*?)</summary>", 
+                        ls_valid_diagrams[indx_best_diagram]["raw"], 
+                        re.DOTALL
+                    )
+                    st.markdown(summary[0])
                     
-                if i == 1:  # mermaid code
+                if i == 2:  # mermaid code
                     st.markdown("```" + ls_valid_diagrams[indx_best_diagram]["processed_graph"] + "```")
                     
-                if i == 2:  # raw llm variant outputs
+                if i == 3:  # raw llm variant outputs
                     st.markdown(ls_valid_diagrams[indx_best_diagram]["raw"])
                     
-                if i == 3:  # raw llm selection output
+                if i == 4:  # raw llm selection output
                     st.markdown(raw_selection_output)
                 
-                if i > 3:  # raw llm selection output
+                if i > 4:  # raw llm selection output
                     html_code = f"""
                                 <html>
                                   <body>
@@ -256,7 +265,7 @@ def select_diagram(
     Select the most informative Mermaid diagram among the following {num_of_diagrams}.
     The candidate Mermaid diagrams are included inside XML tags, along with their corresponding index number. 
     The most informative Mermaid diagram should capture the main gist of the text. 
-    Someone who would only view the Mermaid diagram, should understand the main concepts of the text, without having to read it.
+    Someone who would only view the selected Mermaid diagram, should understand the main concepts of the text, without having to read it.
     Select the index of the most informative Mermaid diagram and provide it inside <selected_index></selected_index> XML tags.
     """
     
@@ -345,54 +354,58 @@ def generate_diagram(
             }
         )
         modelId = "anthropic.claude-v2:1"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+        # modelId = "anthropic.claude-3-sonnet-20240229-v1:0"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
         accept = "application/json"
         contentType = "application/json"
 
-        # generate graphs
-        response = st.session_state.bedrock_runtime.invoke_model(
-            body=body, 
-            modelId=modelId, 
-            accept=accept, 
-            contentType=contentType
-        )
-        response_body = json.loads(response.get("body").read())
+        while len(ls_valid_indx) == 0:
+            # generate graphs
+            response = st.session_state.bedrock_runtime.invoke_model(
+                body=body, 
+                modelId=modelId, 
+                accept=accept, 
+                contentType=contentType
+            )
+            response_body = json.loads(response.get("body").read())
 
-        ls_str_mermaid_graph = find_between(
-            response_body.get("completion"), 
-            "<mermaid>", 
-            "</mermaid>"
-        )
+            # parse graphs from the completion
+            ls_str_mermaid_graph = find_between(
+                response_body.get("completion"), 
+                "<mermaid>", 
+                "</mermaid>"
+            )
 
-        for d,str_mermaid_graph in enumerate(ls_str_mermaid_graph):
-            
-            graph_validity = check_graph_validity(
-                    standardize_graph(str_mermaid_graph),
-                )
-            if graph_validity is True:
-                ls_valid_indx.append(d)
-                
-            # log outputs
-            dc_output = {}
-            dc_output["raw"] = response_body.get("completion")
-            dc_output["graph"] = str_mermaid_graph
-            dc_output["processed_graph"] = standardize_graph(str_mermaid_graph)
-            dc_output["valid"] = graph_validity
-            ls_diagrams.append(dc_output)
+            # check validity of graphs and extract details
+            for d,str_mermaid_graph in enumerate(ls_str_mermaid_graph):
+                graph_validity = check_graph_validity(
+                        standardize_graph(str_mermaid_graph),
+                    )
+                if graph_validity is True:
+                    ls_valid_indx.append(d)
+                    dc_output = {}
+                    dc_output["raw"] = response_body.get("completion")
+                    dc_output["graph"] = str_mermaid_graph
+                    dc_output["processed_graph"] = standardize_graph(str_mermaid_graph)
+                    dc_output["valid"] = graph_validity
+                    ls_diagrams.append(dc_output)
 
-            # display_diagram(
-            #     dc_diagram=dc_output, 
-            #     webpage_title=st.session_state.webpage_title, 
-            #     iteration=d+1
-            # )
+                    display_diagram(
+                        dc_diagram=dc_output, 
+                        webpage_title=st.session_state.webpage_title, 
+                        iteration=d+1
+                    )
+                else:
+                    st.write("Variant " + str(d) + " is not valid!")
+            if len(ls_valid_indx) == 0:
+                st.write("No valid candidate was found. Regenerating...")
+               
         
-        status.update(label="Selecting the best among " + str(str(len(ls_valid_indx))) + " valid variants...", expanded=True)
+        st.write("Selecting the best among " + str(str(len(ls_valid_indx))) + " valid variants...")
         
-        ls_valid_diagrams = [ls_diagrams[i] for i in ls_valid_indx]
-        dc_selection = select_diagram(ls_valid_diagrams)
-        
+        dc_selection = select_diagram(ls_diagrams)
         
         display_variants(
-            ls_valid_diagrams = ls_valid_diagrams,
+            ls_valid_diagrams = ls_diagrams,
             indx_best_diagram = dc_selection["indx_selected"],
             raw_selection_output = dc_selection["raw_output"],
             webpage_title=st.session_state.webpage_title, 
