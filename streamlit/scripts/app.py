@@ -293,11 +293,10 @@ def select_diagram(
     
 
 
-def generate_diagram(
+def generate_diagram_variants(
     url,
     prompt,
     number_of_diagrams=1,
-    kind="flowchart", # "mindmap" or "flowchart"
     orientation="LR", # "LR" or "TD"
     repeat_on_error=True,
     mermaid_context=True,
@@ -337,7 +336,6 @@ def generate_diagram(
                 ]
             }
         )
-        # modelId = "anthropic.claude-v2:1"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
         modelId = "anthropic.claude-3-sonnet-20240229-v1:0"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
         accept = "application/json"
         contentType = "application/json"
@@ -402,6 +400,115 @@ def generate_diagram(
     return ls_diagrams
 
 
+
+
+
+def generate_diagram(
+    url,
+    prompt,
+    number_of_diagrams=1,
+    orientation="LR", # "LR" or "TD"
+    repeat_on_error=True,
+    mermaid_context=True,
+    max_tokens_to_sample=500,
+    temperature=0.9,
+    top_k=250,
+    top_p=1,
+):
+    
+    start_time = time.time()
+    
+    with st.status("Generating " + str(number_of_diagrams) + " visual gists...", expanded=True) as status:
+        
+        ls_diagrams=[]
+        key_count = 0
+
+        for d in range(number_of_diagrams):
+
+            # setting parameters 
+            body = json.dumps(
+                {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": max_tokens_to_sample,
+                    "temperature": temperature,
+                    "top_k": top_k,
+                    "top_p": top_p,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": prompt
+                                }
+                            ]
+                        }
+                    ]
+                }
+            )
+            modelId = "anthropic.claude-3-sonnet-20240229-v1:0"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+            accept = "application/json"
+            contentType = "application/json"
+
+            # generate graph
+            attempt = 1
+            graph_error = True
+            while graph_error == True:
+                key_count += 1
+                st.write("Generating variation " + str(d+1) + " out of " + str(number_of_diagrams) + " (attempt " + str(attempt) + ")")
+                
+                response = st.session_state.bedrock_runtime.invoke_model(
+                    body=body, 
+                    modelId=modelId, 
+                    accept=accept, 
+                    contentType=contentType
+                )
+                response_body = json.loads(response.get("body").read())
+                
+                # parse graphs from the completion
+                ls_mermaid_graph = find_between(
+                    response_body["content"][0]["text"], 
+                    "<mermaid>", 
+                    "</mermaid>"
+                )
+                str_mermaid_graph = ls_mermaid_graph[0]
+                graph_validity = check_graph_validity(
+                    standardize_graph(str_mermaid_graph),
+                )
+
+                if repeat_on_error is True:
+                    graph_error = not graph_validity
+                    attempt += 1
+                    if graph_error is True:
+                        st.write("Graph has errors! Reattempting...")
+                else:
+                    graph_error = False
+
+            # log outputs
+            dc_output = {}
+            dc_output["raw"] = response_body["content"][0]["text"]
+            dc_output["graph"] = str_mermaid_graph
+            dc_output["processed_graph"] = standardize_graph(str_mermaid_graph)
+            dc_output["valid"] = graph_validity
+            ls_diagrams.append(dc_output)
+            
+            display_diagram(
+                dc_diagram=dc_output, 
+                webpage_title=st.session_state.webpage_title, 
+                iteration=d+1
+            )
+    
+        duration = time.time() - start_time
+        status.update(
+            label="Visual gist completed! (in " + str(round(duration,1)) + " sec)", 
+            state="complete", 
+            expanded=True
+        )
+    return ls_diagrams
+
+
+
+
 def text_url_changed():
     if st.session_state.text_url != "":
         try:
@@ -433,8 +540,8 @@ if 'webpage_title' not in st.session_state:
 if 'text_content' not in st.session_state:
     st.session_state.text_content = None    
     
-if 'prompt_template' not in st.session_state:
-    st.session_state.prompt_template = """         
+if 'prompt_template_variants' not in st.session_state:
+    st.session_state.prompt_template_variants = """         
     You are an amazing professor who can read any webpage, break it down to its essentials, and explain it visually to anyone, using Mermaid graphs. 
                 
     Here is a revision of the Mermaid notation and a given webpage text for you to reference for the following task. Read both of them carefully because they are necessary for the task that you will have to solve. 
@@ -463,6 +570,43 @@ if 'prompt_template' not in st.session_state:
     4. The orientation of each of the {how_many} Mermaid diagrams should be {orientation}.
     5. Include each of the {how_many} Mermaid diagrams inside <mermaid> </mermaid> tags.
     6. Use only information from within the given text. Don't make up new information.
+    </specifications>
+    """
+    
+    
+    
+if 'prompt_template_single' not in st.session_state:
+    st.session_state.prompt_template_single = """             
+    You are an amazing professor who can read any webpage, break it down to its essentials, and explain it visually to anyone, using Mermaid graphs. 
+                
+    Here is a revision of the Mermaid notation and a given webpage text for you to reference for the following task. Read both of them carefully because they are necessary for the task that you will have to solve. 
+                
+    <mermaid_notation>
+    {context_mermaid_notation}
+    </mermaid_notation>
+
+    <text>
+    {html_text}
+    </text>
+
+    <task>
+    Summarize the given text and provide the summary inside <summary> tags. 
+    Then convert the summary to a {kind} using Mermaid notation. 
+    The {kind} should capture the main gist of the summary, without too many low-level details. 
+    Someone who would only view the Mermaid {kind}, should understand the gist of the summary. 
+    The Mermaid {kind} should follow all the correct notation rules and should compile without any syntax errors.
+    Use the following specifications for the generated Mermaid {kind}:
+    </task>
+
+    <specifications>
+    1. Use different colors, node shapes (e.g. rectangle, circle, rhombus, hexagon, trapezoid, parallelogram etc.), and subgraphs to represent different concepts in the given text.
+    2. If you are using subgraphs, each subgraph should have its own indicative name inside quotes. 
+    3. Use "links with text" to indicate actions, relationships or influence between a source nodes and destination nodes.
+    4. The orientation of the Mermaid {kind}s should be {orientation}.
+    5. Include the Mermaid {kind} inside <mermaid> </mermaid> tags.
+    6. Do not write anything after the </mermaid> tag.
+    7. Use only information from within the given text. Don't make up new information.
+    8. Before the output, check the result for any errors. 
     </specifications>
     """
     
@@ -1021,7 +1165,7 @@ with col1:
                 with col1:
                     st.selectbox(
                         label='Technique', 
-                        key='selectbox_kind',
+                        key='selectbox_technique',
                         options=('Generate variants & select', 'Generate only'),
                         index=0
                     )
@@ -1076,7 +1220,10 @@ with col1:
                 st.markdown(st.session_state.text_content)                
         
         with tab_prompt_template:
-            st.text(st.session_state.prompt_template)
+            if st.session_state.selectbox_technique == 'Generate only':
+                st.text(st.session_state.prompt_template_single)
+            else:
+                st.text(st.session_state.prompt_template_variants)
 
         with tab_prompt:
             if st.session_state.text_content is None:
@@ -1098,7 +1245,11 @@ with col1:
                     context_mermaid_notation = ""
 
                 # preparing prompt
-                prompt = st.session_state.prompt_template  # start from prompt template
+                if st.session_state.selectbox_technique == 'Generate only':
+                    prompt = st.session_state.prompt_template_single  # start from prompt template
+                else:
+                    prompt = st.session_state.prompt_template_variants  # start from prompt template
+
                 if st.session_state.checkbox_mermaid_context is False:
                     prompt = prompt.replace(
                         prompt[prompt.find("<mermaid_notation>"):prompt.find("</mermaid_notation>")+21], 
@@ -1135,19 +1286,34 @@ with col2:
                 disabled=button_disabled,
             ):
             
-            ls_diagrams = generate_diagram(
-                url=st.session_state.text_url,
-                prompt=st.session_state.text_prompt,
-                number_of_diagrams=st.session_state.input_number_of_diagrams,
-                kind=st.session_state.selectbox_kind,
-                orientation=st.session_state.selectbox_orientation,
-                repeat_on_error=st.session_state.checkbox_repeat,
-                mermaid_context=st.session_state.checkbox_mermaid_context,
-                max_tokens_to_sample=st.session_state.slider_max_tokens,
-                temperature=st.session_state.slider_temperature,
-                top_k=st.session_state.slider_top_k,
-                top_p=st.session_state.slider_top_p,
-            )
+            if st.session_state.selectbox_technique == 'Generate only':
+                # individual graphs
+                ls_diagrams = generate_diagram(
+                    url=st.session_state.text_url,
+                    prompt=st.session_state.text_prompt,
+                    number_of_diagrams=st.session_state.input_number_of_diagrams,
+                    orientation=st.session_state.selectbox_orientation,
+                    repeat_on_error=st.session_state.checkbox_repeat,
+                    mermaid_context=st.session_state.checkbox_mermaid_context,
+                    max_tokens_to_sample=st.session_state.slider_max_tokens,
+                    temperature=st.session_state.slider_temperature,
+                    top_k=st.session_state.slider_top_k,
+                    top_p=st.session_state.slider_top_p,
+                )
+            else:
+                # variants and selecting the best
+                ls_diagrams = generate_diagram_variants(
+                    url=st.session_state.text_url,
+                    prompt=st.session_state.text_prompt,
+                    number_of_diagrams=st.session_state.input_number_of_diagrams,
+                    orientation=st.session_state.selectbox_orientation,
+                    repeat_on_error=st.session_state.checkbox_repeat,
+                    mermaid_context=st.session_state.checkbox_mermaid_context,
+                    max_tokens_to_sample=st.session_state.slider_max_tokens,
+                    temperature=st.session_state.slider_temperature,
+                    top_k=st.session_state.slider_top_k,
+                    top_p=st.session_state.slider_top_p,
+                )
             
 
                 
