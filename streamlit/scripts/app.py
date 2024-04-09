@@ -120,13 +120,11 @@ def display_variants(
                 "Visual gist", 
                 "Summary",
                 "Mermaid code", 
-                "Raw variants",
-                "Raw selection",
+                "Reasoning"
             ]
-        for i in range(len(ls_valid_diagrams) - 1):
-            ls_tabs.append("Variant " + str(i+1))
+        # for i in range(len(ls_valid_diagrams) - 1):
+        #     ls_tabs.append("Variant " + str(i+1))
             
-        
         for i,current_tab in enumerate(st.tabs(ls_tabs)):
             with current_tab:
                 
@@ -154,7 +152,7 @@ def display_variants(
                     )
                 
                 if i == 1:  # text summary
-                    summary = indx_selected = re.findall(
+                    summary = re.findall(
                         r"<summary>(.*?)</summary>", 
                         ls_valid_diagrams[indx_best_diagram]["raw"], 
                         re.DOTALL
@@ -163,38 +161,10 @@ def display_variants(
                     
                 if i == 2:  # mermaid code
                     st.markdown("```" + ls_valid_diagrams[indx_best_diagram]["processed_graph"] + "```")
-                    
-                if i == 3:  # raw llm variant outputs
-                    st.markdown(ls_valid_diagrams[indx_best_diagram]["raw"])
-                    
-                if i == 4:  # raw llm selection output
+                     
+                if i == 3:  # raw llm selection output
                     st.markdown(raw_selection_output)
                 
-                if i > 4:  # raw llm selection output
-                    html_code = f"""
-                                <html>
-                                  <body>
-                                    <pre class="mermaid">
-                                    {ls_other_variants[0]["processed_graph"]}
-                                    </pre>
-                                    <script type="module">
-                                      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                                      mermaid.initialize({{ startOnLoad: true }});
-                                    </script>
-                                  </body>
-                                </html>
-                                """
-                    html_code = html_code.replace("{{", "{")
-                    html_code = html_code.replace("}}", "}")
-                    components.html(
-                        html_code,
-                        height=window_hight,
-                        scrolling=True,
-                    )
-                    # st.write(ls_other_variants[0]["processed_graph"])
-                    del ls_other_variants[0]
-
-
 
 
 def display_diagram(dc_diagram, webpage_title, iteration, window_hight=500):
@@ -253,15 +223,13 @@ def select_diagram(
     num_of_diagrams = len(ls_diagrams)
     html_text = st.session_state.text_content
     
-    prompt = f"""
-    \n\nHuman:              
+    prompt = f"""           
     Here is a webpage text for you to reference for the following task. Read it carefully because it is necessary for the task that you will have to solve. 
 
     <text>
     {html_text}
     </text>
 
-    <task>
     Select the most informative Mermaid diagram among the following {num_of_diagrams}.
     The candidate Mermaid diagrams are included inside XML tags, along with their corresponding index number. 
     The most informative Mermaid diagram should capture the main gist of the text. 
@@ -269,48 +237,54 @@ def select_diagram(
     Select the index of the most informative Mermaid diagram and provide it inside <selected_index></selected_index> XML tags.
     """
     
+    # adding the candidate mermaid diagrams and their indices
     for i,diagram in enumerate(ls_diagrams):
         prompt += ("\n\n<diagram " + str(i) + ">\n")
         prompt += diagram["processed_graph"]
         prompt += ("\n</diagram " + str(i) + ">\n")  
-    prompt += "\n\nAssistant: The most informative diagram is "
-
     
     # setting parameters 
     body = json.dumps(
         {
-            "prompt": prompt, 
-            "max_tokens_to_sample": 512,
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 512,
             "temperature": 0.1,
             "top_k": 250,
             "top_p": 1,
-            "stop_sequences": ["\n\nHuman:"]
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt
+                        }
+                    ]
+                }
+            ]
         }
     )
-    modelId = "anthropic.claude-v2:1"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+    modelId = "anthropic.claude-3-sonnet-20240229-v1:0"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
     accept = "application/json"
     contentType = "application/json"
 
-    # generate graph
-
+    # LLM request
     response = st.session_state.bedrock_runtime.invoke_model(
         body=body, 
         modelId=modelId, 
         accept=accept, 
         contentType=contentType
     )
-    response_body = json.loads(response.get("body").read())
+    response_body = json.loads(response.get("body").read())  
     
     indx_selected = re.findall(
         r"<selected_index>(.*?)</selected_index>", 
-        response_body.get("completion"), 
+        response_body["content"][0]["text"], 
         re.DOTALL
     )
     indx_selected = int(indx_selected[0])
-
     
-    
-    dc_output = {'indx_selected': indx_selected, 'raw_output': response_body.get("completion")}
+    dc_output = {'indx_selected': indx_selected, 'raw_output': response_body["content"][0]["text"]}
 
     return dc_output
 
@@ -345,16 +319,26 @@ def generate_diagram(
         # setting parameters 
         body = json.dumps(
             {
-                "prompt": prompt, 
-                "max_tokens_to_sample": max_tokens_to_sample,
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": max_tokens_to_sample,
                 "temperature": temperature,
                 "top_k": top_k,
                 "top_p": top_p,
-                "stop_sequences": ["\n\nHuman:"]
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ]
             }
         )
-        modelId = "anthropic.claude-v2:1"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
-        # modelId = "anthropic.claude-3-sonnet-20240229-v1:0"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+        # modelId = "anthropic.claude-v2:1"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+        modelId = "anthropic.claude-3-sonnet-20240229-v1:0"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
         accept = "application/json"
         contentType = "application/json"
 
@@ -367,10 +351,12 @@ def generate_diagram(
                 contentType=contentType
             )
             response_body = json.loads(response.get("body").read())
+            
+            # st.write(response_body["content"][0]["text"])
 
             # parse graphs from the completion
             ls_str_mermaid_graph = find_between(
-                response_body.get("completion"), 
+                response_body["content"][0]["text"], 
                 "<mermaid>", 
                 "</mermaid>"
             )
@@ -383,7 +369,7 @@ def generate_diagram(
                 if graph_validity is True:
                     ls_valid_indx.append(d)
                     dc_output = {}
-                    dc_output["raw"] = response_body.get("completion")
+                    dc_output["raw"] = response_body["content"][0]["text"]
                     dc_output["graph"] = str_mermaid_graph
                     dc_output["processed_graph"] = standardize_graph(str_mermaid_graph)
                     dc_output["valid"] = graph_validity
@@ -448,7 +434,7 @@ if 'text_content' not in st.session_state:
     st.session_state.text_content = None    
     
 if 'prompt_template' not in st.session_state:
-    st.session_state.prompt_template = """\n\nHuman:              
+    st.session_state.prompt_template = """         
     You are an amazing professor who can read any webpage, break it down to its essentials, and explain it visually to anyone, using Mermaid graphs. 
                 
     Here is a revision of the Mermaid notation and a given webpage text for you to reference for the following task. Read both of them carefully because they are necessary for the task that you will have to solve. 
@@ -478,12 +464,9 @@ if 'prompt_template' not in st.session_state:
     5. Include each of the {how_many} Mermaid diagrams inside <mermaid> </mermaid> tags.
     6. Use only information from within the given text. Don't make up new information.
     </specifications>
-    \n\nAssistant:
     """
     
 
-    
-    
 if 'mermaid_context' not in st.session_state:
     st.session_state.mermaid_context = """
     Flowcharts Syntax | Mermaid
@@ -1052,10 +1035,10 @@ with col1:
             with st.container(border=True):
                 st.markdown("##### LLM parameters") 
                 st.slider(
-                    'Max tokens to sample',
+                    'Max tokens',
                     min_value=1, 
                     max_value=2048, 
-                    value=1024,
+                    value=2048,
                     step=1,
                     key='slider_max_tokens',
                 )
