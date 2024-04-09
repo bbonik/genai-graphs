@@ -232,9 +232,9 @@ def select_diagram(
 
     Select the most informative Mermaid diagram among the following {num_of_diagrams}.
     The candidate Mermaid diagrams are included inside XML tags, along with their corresponding index number. 
-    The most informative Mermaid diagram should capture the main gist of the text. 
+    The most informative Mermaid diagram should be the one that includes the most details from the text. 
     Someone who would only view the selected Mermaid diagram, should understand the main concepts of the text, without having to read it.
-    Select the index of the most informative Mermaid diagram and provide it inside <selected_index></selected_index> XML tags.
+    Explain which of the Mermaid diagrams is the most informative and provide its index inside <selected_index></selected_index> XML tags.
     """
     
     # adding the candidate mermaid diagrams and their indices
