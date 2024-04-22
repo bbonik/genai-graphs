@@ -1140,81 +1140,42 @@ with col1:
 
             with st.container(border=True):
                 st.markdown("##### Prompt parameters") 
-                ccol0, ccol1, ccol2 = st.columns(3)
+                col0, col1 = st.columns(2)
 
-                with ccol0:
-                    with st.container(border=True):
-                        st.markdown("**Generation**") 
-                        st.number_input(
-                            label='Number of diagrams to generate', 
-                            key="input_number_of_diagrams",
-                            min_value=1,
-                            max_value=10,
-                            step=1,
-                            value=1
-                        )
-                        st.selectbox(
-                            label='Technique', 
-                            key='selectbox_technique',
-                            options=('Generate separately', 'Generate together'),
-                            index=0
-                        )
-                        st.checkbox(
-                            'Repeat on error',
-                            value=True,
-                            key='checkbox_repeat',
-                        )
-                        st.checkbox(
-                            'Include Mermaid context',
-                            value=False,
-                            key='checkbox_mermaid_context',
-                        )
-                        
-                with ccol1:  
-                    with st.container(border=True):
-                        st.markdown("**Appearance**") 
-                        st.selectbox(
-                            label='Orientation', 
-                            key='selectbox_orientation',
-                            options=('LR', 'RL', 'TD', 'BT'),
-                            index=0
-                        )
-                        st.selectbox(
-                            label='Color', 
-                            key='selectbox_color',
-                            options=('X', 'Y', 'Z'),
-                            index=0
-                        )
-                        st.markdown(" \n\n\n\n\n\n")
-                        
-                with ccol2:  
-                    with st.container(border=True):
-                        st.markdown("**Reflection**") 
-                        st.selectbox(
-                            label='Approach', 
-                            key='selectbox_approach',
-                            options=('Select best diagram', 'Select & refine best diagram'),
-                            index=0
-                        )
-                        st.checkbox(
-                            'Select the best diagram',
-                            value=True,
-                            key='checkbox_select_diag',
-                        )
-                        st.number_input(
-                            label='Number of reflection cycles', 
-                            key="input_number_cycles",
-                            min_value=1,
-                            max_value=10,
-                            step=1,
-                            value=1
-                        )
-                        st.write(" ")
-                        st.write(" ")
-                        st.write(" ")
-                        st.write(" ")
-                        
-
+                with col0:
+                    st.number_input(
+                        label='Number of diagrams to generate', 
+                        key='input_number_of_diagrams',
+                        min_value=1,
+                        max_value=10,
+                        step=1,
+                        value=1
+                    )
+                    st.checkbox(
+                        'Repeat on error',
+                        value=True,
+                        key='checkbox_repeat',
+                    )
+                    st.checkbox(
+                        'Include Mermaid context',
+                        value=False,
+                        key='checkbox_mermaid_context',
+                    )
+                
+                with col1:
+                    st.selectbox(
+                        label='Technique', 
+                        key='selectbox_technique',
+                        options=('Generate variants & select', 'Generate only'),
+                        index=0
+                    )
+                    st.selectbox(
+                        label='Orientation', 
+                        key='selectbox_orientation',
+                        options=('LR', 'RL', 'TD', 'BT'),
+                        index=0
+                    )
+                
             with st.container(border=True):
                 st.markdown("##### LLM parameters") 
                 st.slider(
@@ -1259,7 +1220,7 @@ with col1:
                 st.markdown(st.session_state.text_content)                
         
         with tab_prompt_template:
-            if st.session_state.selectbox_technique == 'Generate separately':
+            if st.session_state.selectbox_technique == 'Generate only':
                 st.text(st.session_state.prompt_template_single)
             else:
                 st.text(st.session_state.prompt_template_variants)
@@ -1284,7 +1245,7 @@ with col1:
                     context_mermaid_notation = ""
 
                 # preparing prompt
-                if st.session_state.selectbox_technique == 'Generate separately':
+                if st.session_state.selectbox_technique == 'Generate only':
                     prompt = st.session_state.prompt_template_single  # start from prompt template
                 else:
                     prompt = st.session_state.prompt_template_variants  # start from prompt template
@@ -1325,7 +1286,7 @@ with col2:
                 disabled=button_disabled,
             ):
             
-            if st.session_state.selectbox_technique == 'Generate separately':
+            if st.session_state.selectbox_technique == 'Generate only':
                 # individual graphs
                 ls_diagrams = generate_diagram(
                     url=st.session_state.text_url,
