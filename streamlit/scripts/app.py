@@ -517,11 +517,21 @@ def text_url_changed():
                 postprocess=False, 
                 print_text=False
             )
+            st.session_state.text_raw = ""  # deactivate the raw text input
         except Exception as e:
             st.write(str(e))
             html_text = ""
         st.session_state.text_content = html_text
         
+    else:
+        st.session_state.text_content = None
+        
+        
+        
+def text_raw_changed():
+    if st.session_state.text_raw != "":
+        st.session_state.text_content = st.session_state.text_raw
+        st.session_state.text_url = ""  # deactivate the URL input
     else:
         st.session_state.text_content = None
 
@@ -1123,20 +1133,33 @@ with col1:
 
         tab_parameters, tab_webpage_text, tab_prompt_template, tab_prompt = st.tabs(
             [
-                "Parameters", 
-                "Webpage text", 
+                "Inputs", 
+                "Text", 
                 "Prompt template", 
                 "Prompt"
             ]
         )
 
         with tab_parameters:
-            st.text_input(
-                label='Webpage URL', 
-                key='text_url',
-                placeholder='Paste the URL of a webpage which you want to generate a visual gist diagram',
-                on_change=text_url_changed
-            )
+            
+            with st.container(border=True):
+                st.markdown("##### Input text") 
+                st.text_input(
+                    label='Text from a webpage URL:', 
+                    key='text_url',
+                    placeholder='Paste the URL of a webpage from which you want to generate a visual gist diagram',
+                    on_change=text_url_changed
+                )
+                
+                st.write("or")
+                
+                st.text_area(
+                    label="Raw text:",
+                    key="text_raw",
+                    placeholder='Paste any raw text from which you want to generate a visual gist diagram',
+                    on_change=text_raw_changed,
+                    height=50
+                )
 
             with st.container(border=True):
                 st.markdown("##### Prompt parameters") 
