@@ -547,7 +547,10 @@ if 'webpage_title' not in st.session_state:
     st.session_state.webpage_title = ""
     
 if 'text_content' not in st.session_state:
-    st.session_state.text_content = None    
+    st.session_state.text_content = None
+    
+if 'diagrams' not in st.session_state:
+    st.session_state.diagrams = []
     
 if 'prompt_template_variants' not in st.session_state:
     st.session_state.prompt_template_variants = """         
@@ -850,6 +853,27 @@ with col2:
                     top_k=st.session_state.slider_top_k,
                     top_p=st.session_state.slider_top_p,
                 )
+                
+            
+            #------
+            
+            
+            if st.session_state.checkbox_select_diag == True:
+                
+                st.write("Selecting the best among " + str(str(len(ls_diagrams))) + " diagrams...")
+        
+                dc_selection = select_diagram(ls_diagrams)
+
+                display_variants(
+                    ls_valid_diagrams = ls_diagrams,
+                    indx_best_diagram = dc_selection["indx_selected"],
+                    raw_selection_output = dc_selection["raw_output"],
+                    webpage_title=st.session_state.webpage_title, 
+                )
+                
+                
+            
+            
             
 
                 
