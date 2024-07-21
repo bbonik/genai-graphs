@@ -109,7 +109,8 @@ def display_variants(
         indx_best_diagram,
         raw_selection_output,
         webpage_title, 
-        window_hight=500
+        window_hight=500,
+        theme='default'
     ):
 
     ls_other_variants = [ls_valid_diagrams[i] for i in range(len(ls_valid_diagrams)) if i != indx_best_diagram]  # without best digram
@@ -138,7 +139,7 @@ def display_variants(
                                     </pre>
                                     <script type="module">
                                       import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                                      mermaid.initialize({{ startOnLoad: true }});
+                                      mermaid.initialize({{ startOnLoad: true, 'theme': '{theme}' }});
                                     </script>
                                   </body>
                                 </html>
@@ -216,6 +217,148 @@ def display_diagram(dc_diagram, webpage_title, iteration, theme='default', windo
 
     
     
+    
+def refine_diagram(
+    diagram, 
+    iterations=3
+):
+    
+    html_text = st.session_state.text_content
+    theme=st.session_state.selectbox_color
+    window_hight=500
+    
+    prompt_template = """  
+    You are a wise professor who can read any document, break it down to its essentials, and explain it visually to anyone, using Mermaid graphs. 
+    Here is a given text for you to reference for the following task. Read it carefully because it is necessary for the task that you will have to solve. 
+
+    <text>
+    {html_text}
+    </text>
+    
+    Here is a Mermaid diagram intented to summarize the content of the previous text. The intention is that someone who only viewed the given Mermaid diagram, would understand the main concepts of the text, without having to read it.
+
+    <diagram>
+    {diagram}
+    </diagram>
+
+    Evaluate whether the given Mermaid diagram is a good visual approximation of the given text.
+    Here are some points to consider:
+    1. What are the most important points of the text, that someone should know about?
+    2. Does the diagram mention all these points?
+    3. Does the diagram capture all the interactions between all the important points?
+    4. Does the diagram use different colors, shapes and arrows to capture the important points and their interactions?
+    5. Is the diagramm too simplistic?new 
+    6. Is the diagram too complicated?
+    7. Is the diagram visually pleasing?
+    8. Do you think that the diagram can be improved?
+    
+    Think whether the given diagram can be improved or not, and explain your thought process inside <justification></justification> XML tags.
+    If you think that the given Mermaid diagram can be improved, refine it and include the new Mermaid code inside <new_diagram></new_diagram> XML tags.
+    If you think that the given Mermaid diagram can not be improved, include the original Mermaid code inside <new_diagram></new_diagram> XML tags.
+    Remember don't forget to "close" the new diagram XML tags with </new_diagram>.
+    """
+    
+    # prepare prompt
+    prompt = prompt_template.replace("{html_text}", st.session_state.text_content)
+    prompt = prompt.replace("{diagram}", diagram)
+    
+    for i in range(iterations):
+        
+        st.write("Iteration " + str(i) + ":")
+        
+        # setting parameters 
+        body = json.dumps(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 2048,
+                "temperature": 0.1,
+                "top_k": 250,
+                "top_p": 1,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ]
+            }
+        )
+        modelId = "anthropic.claude-3-sonnet-20240229-v1:0"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+        accept = "application/json"
+        contentType = "application/json"
+
+        # LLM request
+        response = st.session_state.bedrock_runtime.invoke_model(
+            body=body, 
+            modelId=modelId, 
+            accept=accept, 
+            contentType=contentType
+        )
+        response_body = json.loads(response.get("body").read())  
+        
+        # parsing output
+        
+        # st.write(response_body["content"][0]["text"])
+
+        justification = re.findall(
+            r"<justification>(.*?)</justification>", 
+            response_body["content"][0]["text"], 
+            re.DOTALL
+        )
+        
+        new_diagram = re.findall(
+            r"<new_diagram>(.*?)</new_diagram>", 
+            response_body["content"][0]["text"], 
+            re.DOTALL
+        )
+        
+        # st.write(new_diagram)
+        
+        html_code = f"""
+                    <html>
+                      <body>
+                        <pre class="mermaid">
+                        {new_diagram[0]}
+                        </pre>
+                        <script type="module">
+                          import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                          mermaid.initialize({{ startOnLoad: true, 'theme': '{theme}' }});
+                        </script>
+                      </body>
+                    </html>
+                    """
+
+        html_code = html_code.replace("{{", "{")
+        html_code = html_code.replace("}}", "}")
+        components.html(
+            html_code,
+            height=window_hight,
+            scrolling=True
+        )
+        
+        # prepare prompt
+        prompt = prompt_template.replace("{html_text}", st.session_state.text_content)
+        prompt = prompt.replace("{diagram}", new_diagram[0])
+        
+    dc_output = {
+        'refined_diagram': new_diagram[0], 
+        'justification': justification[0],
+        'raw_output': response_body["content"][0]["text"]
+    }
+        
+    return dc_output
+        
+
+        
+        
+        
+    
+    
+    
 def select_diagram(   
     ls_diagrams
 ):
@@ -223,14 +366,15 @@ def select_diagram(
     num_of_diagrams = len(ls_diagrams)
     html_text = st.session_state.text_content
     
-    prompt = f"""           
-    Here is a webpage text for you to reference for the following task. Read it carefully because it is necessary for the task that you will have to solve. 
+    prompt = f"""
+    You are a wise professor who can read any document, break it down to its essentials, and explain it visually to anyone, using Mermaid graphs. 
+    Here is a given text for you to reference for the following task. Read it carefully because it is necessary for the task that you will have to solve. 
 
     <text>
     {html_text}
     </text>
 
-    Select the most informative Mermaid diagram among the following {num_of_diagrams}.
+    Think step by step and select the most informative Mermaid diagram among the following {num_of_diagrams}.
     The candidate Mermaid diagrams are included inside XML tags, along with their corresponding index number. 
     The most informative Mermaid diagram should be the one that includes the most details from the text. 
     Someone who would only view the selected Mermaid diagram, should understand the main concepts of the text, without having to read it.
@@ -247,7 +391,7 @@ def select_diagram(
     body = json.dumps(
         {
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 512,
+            "max_tokens": 2048,
             "temperature": 0.1,
             "top_k": 250,
             "top_p": 1,
@@ -375,25 +519,14 @@ def generate_diagram_variants(
                     display_diagram(
                         dc_diagram=dc_output, 
                         webpage_title=st.session_state.webpage_title, 
-                        iteration=d+1
+                        iteration=d+1,
+                        theme=st.session_state.selectbox_color
                     )
                 else:
                     st.write("Variant " + str(d) + " is not valid!")
             if len(ls_valid_indx) == 0:
                 st.write("No valid candidate was found. Regenerating...")
                
-        
-        st.write("Selecting the best among " + str(str(len(ls_valid_indx))) + " valid variants...")
-        
-        dc_selection = select_diagram(ls_diagrams)
-        
-        display_variants(
-            ls_valid_diagrams = ls_diagrams,
-            indx_best_diagram = dc_selection["indx_selected"],
-            raw_selection_output = dc_selection["raw_output"],
-            webpage_title=st.session_state.webpage_title, 
-        )
-        
         duration = time.time() - start_time
         status.update(label="Visual gist completed! (in " + str(round(duration,1)) + " sec)", state="complete", expanded=True)
     return ls_diagrams
@@ -712,24 +845,29 @@ with col1:
                 with ccol2:  
                     with st.container(border=True):
                         st.markdown("**Reflection**") 
-                        st.selectbox(
-                            label='Approach', 
-                            key='selectbox_approach',
-                            options=('Select best diagram', 'Select & refine best diagram'),
-                            index=0
-                        )
                         st.checkbox(
                             'Select the best diagram',
                             value=True,
                             key='checkbox_select_diag',
                         )
+                        st.checkbox(
+                            'Refine diagram',
+                            value=True,
+                            key='checkbox_refine_diag',
+                        )
+                        # st.selectbox(
+                        #     label='Approach', 
+                        #     key='selectbox_approach',
+                        #     options=('Select best diagram', 'Select & refine best diagram'),
+                        #     index=0
+                        # )
                         st.number_input(
                             label='Number of reflection cycles', 
                             key="input_number_cycles",
                             min_value=1,
                             max_value=10,
                             step=1,
-                            value=1
+                            value=3
                         )
                         
 
@@ -860,6 +998,7 @@ with col2:
             
             if st.session_state.checkbox_select_diag == True:
                 
+                st.markdown("""---""") 
                 st.write("Selecting the best among " + str(str(len(ls_diagrams))) + " diagrams...")
         
                 dc_selection = select_diagram(ls_diagrams)
@@ -869,7 +1008,21 @@ with col2:
                     indx_best_diagram = dc_selection["indx_selected"],
                     raw_selection_output = dc_selection["raw_output"],
                     webpage_title=st.session_state.webpage_title, 
+                    theme=st.session_state.selectbox_color
                 )
+                
+                
+                
+            if st.session_state.checkbox_refine_diag == True:
+                
+                st.markdown("""---""") 
+                st.write("Refining diagram...")
+        
+                refined_diagram = refine_diagram(
+                    diagram=ls_diagrams[dc_selection["indx_selected"]]["processed_graph"], 
+                    iterations=st.session_state.input_number_cycles
+                )
+
                 
                 
             
