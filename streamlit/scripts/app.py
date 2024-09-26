@@ -105,15 +105,11 @@ def standardize_graph(graph):
 
 
 def display_variants(
-        ls_valid_diagrams,
-        indx_best_diagram,
-        raw_selection_output,
+        diagram,
         webpage_title, 
         window_hight=500,
         theme='default'
     ):
-
-    ls_other_variants = [ls_valid_diagrams[i] for i in range(len(ls_valid_diagrams)) if i != indx_best_diagram]  # without best digram
 
     with st.container(border=True):
 
@@ -123,8 +119,6 @@ def display_variants(
                 "Mermaid code", 
                 "Reasoning"
             ]
-        # for i in range(len(ls_valid_diagrams) - 1):
-        #     ls_tabs.append("Variant " + str(i+1))
             
         for i,current_tab in enumerate(st.tabs(ls_tabs)):
             with current_tab:
@@ -135,7 +129,7 @@ def display_variants(
                                 <html>
                                   <body>
                                     <pre class="mermaid">
-                                    {ls_valid_diagrams[indx_best_diagram]["processed_graph"]}
+                                    {diagram["processed_graph"]}
                                     </pre>
                                     <script type="module">
                                       import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
@@ -155,16 +149,16 @@ def display_variants(
                 if i == 1:  # text summary
                     summary = re.findall(
                         r"<summary>(.*?)</summary>", 
-                        ls_valid_diagrams[indx_best_diagram]["raw"], 
+                        diagram["raw"], 
                         re.DOTALL
                     )
                     st.markdown(summary[0])
                     
                 if i == 2:  # mermaid code
-                    st.markdown("```" + ls_valid_diagrams[indx_best_diagram]["processed_graph"] + "```")
+                    st.markdown("```" + diagram["processed_graph"] + "```")
                      
                 if i == 3:  # raw llm selection output
-                    st.markdown(raw_selection_output)
+                    st.markdown(diagram["justification"])
                 
 
 
@@ -287,7 +281,7 @@ def refine_diagram(
                 ]
             }
         )
-        modelId = "anthropic.claude-3-sonnet-20240229-v1:0"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+        modelId = st.session_state.model_reflect
         accept = "application/json"
         contentType = "application/json"
 
@@ -408,7 +402,7 @@ def select_diagram(
             ]
         }
     )
-    modelId = "anthropic.claude-3-sonnet-20240229-v1:0"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+    modelId = st.session_state.model_reflect
     accept = "application/json"
     contentType = "application/json"
 
@@ -479,7 +473,7 @@ def generate_diagram_variants(
                 ]
             }
         )
-        modelId = "anthropic.claude-3-sonnet-20240229-v1:0"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+        modelId = st.session_state.model_generate
         accept = "application/json"
         contentType = "application/json"
 
@@ -577,7 +571,7 @@ def generate_diagram(
                     ]
                 }
             )
-            modelId = "anthropic.claude-3-sonnet-20240229-v1:0"  # "anthropic.claude-instant-v1", "anthropic.claude-v2:1"
+            modelId = st.session_state.model_generate
             accept = "application/json"
             contentType = "application/json"
 
@@ -667,6 +661,23 @@ def text_raw_changed():
     else:
         st.session_state.text_content = None
 
+        
+def model_generate_changed():
+    if st.session_state.selectbox_model_generate == "Claude Sonnet 3":
+        st.session_state.model_generate = "anthropic.claude-3-sonnet-20240229-v1:0"
+    elif st.session_state.selectbox_model_generate == "Claude Haiku 3":
+        st.session_state.model_generate = "anthropic.claude-3-haiku-20240307-v1:0"
+    elif st.session_state.selectbox_model_generate == "Claude Sonnet 3.5":
+        st.session_state.model_generate = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+    
+def model_reflect_changed():
+    if st.session_state.selectbox_model_reflect == "Claude Sonnet 3":
+        st.session_state.model_reflect = "anthropic.claude-3-sonnet-20240229-v1:0"
+    elif st.session_state.selectbox_model_reflect == "Claude Haiku 3":
+        st.session_state.model_reflect = "anthropic.claude-3-haiku-20240307-v1:0"
+    elif st.session_state.selectbox_model_reflect == "Claude Sonnet 3.5":
+        st.session_state.model_reflect = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+        
 
 #----------------------------------------------------------- setting up environment
 
@@ -678,6 +689,12 @@ if 'bedrock_runtime' not in st.session_state:
     )
 if 'webpage_title' not in st.session_state:
     st.session_state.webpage_title = ""
+    
+if 'model_generate' not in st.session_state:
+    st.session_state.model_generate = "anthropic.claude-3-sonnet-20240229-v1:0"
+    
+if 'model_reflect' not in st.session_state:
+    st.session_state.model_reflect = "anthropic.claude-3-5-sonnet-20240620-v1:0"
     
 if 'text_content' not in st.session_state:
     st.session_state.text_content = None
@@ -824,6 +841,13 @@ with col1:
                             value=True,
                             key='checkbox_repeat',
                         )
+                        st.selectbox(
+                            label='Model', 
+                            key='selectbox_model_generate',
+                            options=('Claude Sonnet 3', 'Claude Haiku 3', 'Claude Sonnet 3.5'),
+                            index=0,
+                            on_change=model_generate_changed
+                        )
                         
                 with ccol1:  
                     with st.container(border=True):
@@ -868,6 +892,13 @@ with col1:
                             max_value=10,
                             step=1,
                             value=3
+                        )
+                        st.selectbox(
+                            label='Model', 
+                            key='selectbox_model_reflect',
+                            options=('Claude Sonnet 3', 'Claude Haiku 3', 'Claude Sonnet 3.5'),
+                            index=2,
+                            on_change=model_reflect_changed
                         )
                         
 
@@ -997,29 +1028,33 @@ with col2:
             
             
             if st.session_state.checkbox_select_diag == True:
-                
                 st.markdown("""---""") 
                 st.write("Selecting the best among " + str(str(len(ls_diagrams))) + " diagrams...")
         
-                dc_selection = select_diagram(ls_diagrams)
+                if len(ls_diagrams) > 1:
+                    dc_selection = select_diagram(ls_diagrams)
+                    selected_diagram = ls_diagrams[dc_selection["indx_selected"]]
+                    selected_diagram["justification"] = dc_selection["raw_output"]
+                else:
+                    selected_diagram = ls_diagrams[0]
+                    selected_diagram["justification"] = "This is the only available diagram"
 
                 display_variants(
-                    ls_valid_diagrams = ls_diagrams,
-                    indx_best_diagram = dc_selection["indx_selected"],
-                    raw_selection_output = dc_selection["raw_output"],
+                    diagram = selected_diagram,
                     webpage_title=st.session_state.webpage_title, 
                     theme=st.session_state.selectbox_color
                 )
-                
-                
+            else:
+                selected_diagram = ls_diagrams[0]
+                selected_diagram["justification"] = "This is the only available diagram"
+
                 
             if st.session_state.checkbox_refine_diag == True:
-                
                 st.markdown("""---""") 
                 st.write("Refining diagram...")
         
                 refined_diagram = refine_diagram(
-                    diagram=ls_diagrams[dc_selection["indx_selected"]]["processed_graph"], 
+                    diagram=selected_diagram["processed_graph"], 
                     iterations=st.session_state.input_number_cycles
                 )
 
