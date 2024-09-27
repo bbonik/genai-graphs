@@ -219,10 +219,11 @@ def refine_diagram(
     
     html_text = st.session_state.text_content
     theme=st.session_state.selectbox_color
+    system_prompt = st.session_state.prompt_template_system
+    modelId = st.session_state.model_reflect
     window_hight=500
     
     prompt_template = """  
-    You are a wise professor who can read any document, break it down to its essentials, and explain it visually to anyone, using Mermaid graphs. 
     Here is a given text for you to reference for the following task. Read it carefully because it is necessary for the task that you will have to solve. 
 
     <text>
@@ -241,7 +242,7 @@ def refine_diagram(
     2. Does the diagram mention all these points?
     3. Does the diagram capture all the interactions between all the important points?
     4. Does the diagram use different colors, shapes and arrows to capture the important points and their interactions?
-    5. Is the diagramm too simplistic?new 
+    5. Is the diagramm too simplistic? 
     6. Is the diagram too complicated?
     7. Is the diagram visually pleasing?
     8. Do you think that the diagram can be improved?
@@ -257,56 +258,43 @@ def refine_diagram(
     prompt = prompt.replace("{diagram}", diagram)
     
     for i in range(iterations):
-        
         st.write("Iteration " + str(i) + ":")
         
-        # setting parameters 
-        body = json.dumps(
-            {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 2048,
-                "temperature": 0.1,
-                "top_k": 250,
-                "top_p": 1,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            }
-                        ]
-                    }
-                ]
-            }
+        response = st.session_state.bedrock_runtime.converse(
+            modelId=modelId,
+            inferenceConfig={
+                "temperature": 0.1,  # be more factual
+                "maxTokens": 2048,
+                "topP": 1,
+            },
+            system=[
+                {
+                    "text": system_prompt
+                }
+            ],
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "text": prompt
+                        }
+                    ]
+                }
+            ],
         )
-        modelId = st.session_state.model_reflect
-        accept = "application/json"
-        contentType = "application/json"
+        response_text = response["output"]["message"]["content"][0]["text"]
 
-        # LLM request
-        response = st.session_state.bedrock_runtime.invoke_model(
-            body=body, 
-            modelId=modelId, 
-            accept=accept, 
-            contentType=contentType
-        )
-        response_body = json.loads(response.get("body").read())  
-        
         # parsing output
-        
-        # st.write(response_body["content"][0]["text"])
-
         justification = re.findall(
             r"<justification>(.*?)</justification>", 
-            response_body["content"][0]["text"], 
+            response_text, 
             re.DOTALL
         )
         
         new_diagram = re.findall(
             r"<new_diagram>(.*?)</new_diagram>", 
-            response_body["content"][0]["text"], 
+            response_text, 
             re.DOTALL
         )
         
@@ -341,7 +329,7 @@ def refine_diagram(
     dc_output = {
         'refined_diagram': new_diagram[0], 
         'justification': justification[0],
-        'raw_output': response_body["content"][0]["text"]
+        'raw_output': response_text
     }
         
     return dc_output
@@ -359,9 +347,10 @@ def select_diagram(
     
     num_of_diagrams = len(ls_diagrams)
     html_text = st.session_state.text_content
+    modelId = st.session_state.model_reflect
+    system_prompt = st.session_state.prompt_template_system
     
     prompt = f"""
-    You are a wise professor who can read any document, break it down to its essentials, and explain it visually to anyone, using Mermaid graphs. 
     Here is a given text for you to reference for the following task. Read it carefully because it is necessary for the task that you will have to solve. 
 
     <text>
@@ -381,48 +370,41 @@ def select_diagram(
         prompt += diagram["processed_graph"]
         prompt += ("\n</diagram " + str(i) + ">\n")  
     
-    # setting parameters 
-    body = json.dumps(
-        {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 2048,
-            "temperature": 0.1,
-            "top_k": 250,
-            "top_p": 1,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        }
-                    ]
-                }
-            ]
-        }
-    )
-    modelId = st.session_state.model_reflect
-    accept = "application/json"
-    contentType = "application/json"
-
-    # LLM request
-    response = st.session_state.bedrock_runtime.invoke_model(
-        body=body, 
-        modelId=modelId, 
-        accept=accept, 
-        contentType=contentType
-    )
-    response_body = json.loads(response.get("body").read())  
     
+    response = st.session_state.bedrock_runtime.converse(
+        modelId=modelId,
+        inferenceConfig={
+            "temperature": 0.1,  # be more factual
+            "maxTokens": 2048,
+            "topP": 1,
+        },
+        system=[
+            {
+                "text": system_prompt
+            }
+        ],
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "text": prompt
+                    }
+                ]
+            }
+        ],
+    )
+    response_text = response["output"]["message"]["content"][0]["text"]
+
+    # parse index from the completion
     indx_selected = re.findall(
         r"<selected_index>(.*?)</selected_index>", 
-        response_body["content"][0]["text"], 
+        response_text, 
         re.DOTALL
     )
     indx_selected = int(indx_selected[0])
     
-    dc_output = {'indx_selected': indx_selected, 'raw_output': response_body["content"][0]["text"]}
+    dc_output = {'indx_selected': indx_selected, 'raw_output': response_text}
 
     return dc_output
 
@@ -445,53 +427,45 @@ def generate_diagram_variants(
     
     start_time = time.time()
     
-    with st.status("Generating " + str(number_of_diagrams) + " visual gist variants...", expanded=True) as status:
+    with st.status("Generating " + str(number_of_diagrams) + " visual gist variants at once...", expanded=True) as status:
         
         ls_diagrams = []
         ls_valid_indx = []
         key_count = 0
-
-
-        # setting parameters 
-        body = json.dumps(
-            {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": max_tokens_to_sample,
-                "temperature": temperature,
-                "top_k": top_k,
-                "top_p": top_p,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            }
-                        ]
-                    }
-                ]
-            }
-        )
         modelId = st.session_state.model_generate
-        accept = "application/json"
-        contentType = "application/json"
+        system_prompt = st.session_state.prompt_template_system
 
         while len(ls_valid_indx) == 0:
             # generate graphs
-            response = st.session_state.bedrock_runtime.invoke_model(
-                body=body, 
-                modelId=modelId, 
-                accept=accept, 
-                contentType=contentType
-            )
-            response_body = json.loads(response.get("body").read())
-            
-            # st.write(response_body["content"][0]["text"])
+            response = st.session_state.bedrock_runtime.converse(
+                    modelId=modelId,
+                    inferenceConfig={
+                        "temperature": temperature,
+                        "maxTokens": max_tokens_to_sample,
+                        "topP": top_p,
+                        # "topK": top_k,
+                    },
+                    system=[
+                        {
+                            "text": system_prompt
+                        }
+                    ],
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "text": prompt
+                                }
+                            ]
+                        }
+                    ],
+                )
+            response_text = response["output"]["message"]["content"][0]["text"]
 
             # parse graphs from the completion
             ls_str_mermaid_graph = find_between(
-                response_body["content"][0]["text"], 
+                response_text, 
                 "<mermaid>", 
                 "</mermaid>"
             )
@@ -504,7 +478,7 @@ def generate_diagram_variants(
                 if graph_validity is True:
                     ls_valid_indx.append(d)
                     dc_output = {}
-                    dc_output["raw"] = response_body["content"][0]["text"]
+                    dc_output["raw"] = response_text
                     dc_output["graph"] = str_mermaid_graph
                     dc_output["processed_graph"] = standardize_graph(str_mermaid_graph)
                     dc_output["valid"] = graph_validity
@@ -547,33 +521,10 @@ def generate_diagram(
         
         ls_diagrams=[]
         key_count = 0
+        modelId = st.session_state.model_generate
+        system_prompt = st.session_state.prompt_template_system
 
         for d in range(number_of_diagrams):
-
-            # setting parameters 
-            body = json.dumps(
-                {
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": max_tokens_to_sample,
-                    "temperature": temperature,
-                    "top_k": top_k,
-                    "top_p": top_p,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": prompt
-                                }
-                            ]
-                        }
-                    ]
-                }
-            )
-            modelId = st.session_state.model_generate
-            accept = "application/json"
-            contentType = "application/json"
 
             # generate graph
             attempt = 1
@@ -582,17 +533,35 @@ def generate_diagram(
                 key_count += 1
                 st.write("Generating variation " + str(d+1) + " out of " + str(number_of_diagrams) + " (attempt " + str(attempt) + ")")
                 
-                response = st.session_state.bedrock_runtime.invoke_model(
-                    body=body, 
-                    modelId=modelId, 
-                    accept=accept, 
-                    contentType=contentType
+                response = st.session_state.bedrock_runtime.converse(
+                    modelId=modelId,
+                    inferenceConfig={
+                        "temperature": temperature,
+                        "maxTokens": max_tokens_to_sample,
+                        "topP": top_p,
+                        # "topK": top_k,
+                    },
+                    system=[
+                        {
+                            "text": system_prompt
+                        }
+                    ],
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "text": prompt
+                                }
+                            ]
+                        }
+                    ],
                 )
-                response_body = json.loads(response.get("body").read())
-                
+                response_text = response["output"]["message"]["content"][0]["text"]
+
                 # parse graphs from the completion
                 ls_mermaid_graph = find_between(
-                    response_body["content"][0]["text"], 
+                    response_text, 
                     "<mermaid>", 
                     "</mermaid>"
                 )
@@ -611,7 +580,7 @@ def generate_diagram(
 
             # log outputs
             dc_output = {}
-            dc_output["raw"] = response_body["content"][0]["text"]
+            dc_output["raw"] = response_text
             dc_output["graph"] = str_mermaid_graph
             dc_output["processed_graph"] = standardize_graph(str_mermaid_graph)
             dc_output["valid"] = graph_validity
@@ -702,10 +671,13 @@ if 'text_content' not in st.session_state:
 if 'diagrams' not in st.session_state:
     st.session_state.diagrams = []
     
+if 'prompt_template_system' not in st.session_state:
+    st.session_state.prompt_template_system = """
+    You are a wise professor who can read any document, break it down to its essentials, and explain it visually to anyone, using Mermaid graphs.
+    """
+    
 if 'prompt_template_variants' not in st.session_state:
     st.session_state.prompt_template_variants = """         
-    You are a wise professor who can read any document, break it down to its essentials, and explain it visually to anyone, using Mermaid graphs. 
-                
     Here is a given text for you to reference for the following task. Read it carefully because it is necessary for the task that you will have to solve. 
 
     <text>
@@ -735,8 +707,6 @@ if 'prompt_template_variants' not in st.session_state:
     
 if 'prompt_template_single' not in st.session_state:
     st.session_state.prompt_template_single = """             
-    You are a wise professor who can read any document, break it down to its essentials, and explain it visually to anyone, using Mermaid graphs. 
-                
     Here is a given text for you to reference for the following task. Read it carefully because it is necessary for the task that you will have to solve. 
 
     <text>
@@ -920,14 +890,14 @@ with col1:
                     step=0.01,
                     key='slider_temperature',
                 )
-                st.slider(
-                    'Top K',
-                    min_value=0, 
-                    max_value=500, 
-                    value=250,
-                    step=1,
-                    key='slider_top_k',
-                )
+                # st.slider(
+                #     'Top K',
+                #     min_value=0, 
+                #     max_value=500, 
+                #     value=250,
+                #     step=1,
+                #     key='slider_top_k',
+                # )
                 st.slider(
                     'Top P',
                     min_value=0.0, 
@@ -1006,7 +976,6 @@ with col2:
                     repeat_on_error=st.session_state.checkbox_repeat,
                     max_tokens_to_sample=st.session_state.slider_max_tokens,
                     temperature=st.session_state.slider_temperature,
-                    top_k=st.session_state.slider_top_k,
                     top_p=st.session_state.slider_top_p,
                 )
             else:
@@ -1019,7 +988,6 @@ with col2:
                     repeat_on_error=st.session_state.checkbox_repeat,
                     max_tokens_to_sample=st.session_state.slider_max_tokens,
                     temperature=st.session_state.slider_temperature,
-                    top_k=st.session_state.slider_top_k,
                     top_p=st.session_state.slider_top_p,
                 )
                 
