@@ -357,9 +357,9 @@ def select_diagram(
     {html_text}
     </text>
 
-    Think step by step and select the most informative Mermaid diagram among the following {num_of_diagrams}.
+    Think step by step and select the most informative and visually pleasing Mermaid diagram among the following {num_of_diagrams}.
     The candidate Mermaid diagrams are included inside XML tags, along with their corresponding index number. 
-    The most informative Mermaid diagram should be the one that includes the most details from the text. 
+    The most informative Mermaid diagram should be the one that includes the most details from the text and displays it in an easy to understand way.
     Someone who would only view the selected Mermaid diagram, should understand the main concepts of the text, without having to read it.
     Explain which of the Mermaid diagrams is the most informative and provide its index inside <selected_index></selected_index> XML tags.
     """
@@ -704,6 +704,34 @@ if 'prompt_template_variants' not in st.session_state:
     """
     
     
+# if 'prompt_template_single' not in st.session_state:
+#     st.session_state.prompt_template_single = """             
+#     Here is a given text for you to reference for the following task. Read it carefully because it is necessary for the task that you will have to solve. 
+
+#     <text>
+#     {html_text}
+#     </text>
+
+#     <task>
+#     Summarize the given text and provide the summary inside <summary> tags. 
+#     The summary should capture the main points, concepts and entities of the given text, without too many low-level details. 
+#     Then convert the summary to a diagram using Mermaid notation. 
+#     Use the following specifications for the generated Mermaid diagram:
+#     </task>
+
+#     <specifications>
+#     1. The Mermaid diagram should follow all the correct notation rules and should compile without any syntax errors.
+#     2. Use different colors, node shapes (e.g. rectangle, circle, rhombus, hexagon, trapezoid, parallelogram etc.), and subgraphs to represent different concepts and entities in the given text.
+#     3. If you are using subgraphs, each subgraph should have its own indicative name inside quotes. 
+#     4. Use "links with text" to indicate actions, relationships or influence between a source nodes and destination nodes.
+#     5. The orientation of the Mermaid diagram should be {orientation}.
+#     6. The Mermaid diagram should be visually pleasing, easy to understand and not overly complicated.
+#     7. Use only information from within the given text. Don't make up new information.
+#     8. Include the Mermaid diagram inside <mermaid> </mermaid> tags.
+#     9. Before the output, check the result for any errors. 
+#     </specifications>
+#     """    
+
     
 if 'prompt_template_single' not in st.session_state:
     st.session_state.prompt_template_single = """             
@@ -715,7 +743,7 @@ if 'prompt_template_single' not in st.session_state:
 
     <task>
     Summarize the given text and provide the summary inside <summary> tags. 
-    Then convert the summary to a diagram using Mermaid notation. 
+    Then convert the summary to a visually pleasing diagram using Mermaid notation. 
     The diagram should capture the main gist of the summary, without too many low-level details. 
     Someone who would only view the Mermaid diagram, should understand the gist of the summary. 
     The Mermaid diagram should follow all the correct notation rules and should compile without any syntax errors.
