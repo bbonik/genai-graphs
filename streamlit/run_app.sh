@@ -1,3 +1,3 @@
 cd scripts
-sh cleanup.sh
-sh run.sh
+bash cleanup.sh
+bash run.sh
