@@ -632,21 +632,11 @@ def text_raw_changed():
 
         
 def model_generate_changed():
-    if st.session_state.selectbox_model_generate == "Claude Sonnet 3":
-        st.session_state.model_generate = "anthropic.claude-3-sonnet-20240229-v1:0"
-    elif st.session_state.selectbox_model_generate == "Claude Haiku 3":
-        st.session_state.model_generate = "anthropic.claude-3-haiku-20240307-v1:0"
-    elif st.session_state.selectbox_model_generate == "Claude Sonnet 3.5":
-        st.session_state.model_generate = "anthropic.claude-3-5-sonnet-20240620-v1:0"
-    
+    st.session_state.model_generate = st.session_state.dc_available_model_ids[st.session_state.selectbox_model_generate]
+ 
 def model_reflect_changed():
-    if st.session_state.selectbox_model_reflect == "Claude Sonnet 3":
-        st.session_state.model_reflect = "anthropic.claude-3-sonnet-20240229-v1:0"
-    elif st.session_state.selectbox_model_reflect == "Claude Haiku 3":
-        st.session_state.model_reflect = "anthropic.claude-3-haiku-20240307-v1:0"
-    elif st.session_state.selectbox_model_reflect == "Claude Sonnet 3.5":
-        st.session_state.model_reflect = "anthropic.claude-3-5-sonnet-20240620-v1:0"
-        
+    st.session_state.model_reflect = st.session_state.dc_available_model_ids[st.session_state.selectbox_model_reflect]
+
 
 #----------------------------------------------------------- setting up environment
 
@@ -658,7 +648,34 @@ if 'bedrock_runtime' not in st.session_state:
     )
 if 'webpage_title' not in st.session_state:
     st.session_state.webpage_title = ""
-    
+
+if "dc_available_model_ids" not in st.session_state:
+    st.session_state.dc_available_model_ids = {
+        "Claude Haiku 3": "anthropic.claude-3-haiku-20240307-v1:0",
+        "Claude Haiku 3.5": "anthropic.claude-3-5-haiku-20241022-v1:0",
+        "Claude Sonnet 3": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "Claude Sonnet 3.5": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+        "Claude Sonnet 3.5 v2":  "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    }
+
+if "ls_available_models" not in st.session_state:
+    models = st.session_state.dc_available_model_ids.keys()
+    st.session_state.ls_available_models = list(models)
+
+# if "ls_available_llms" not in st.session_state:
+#     client = bedrock.get_bedrock_client(
+#         assumed_role = os.environ.get("BEDROCK_ASSUME_ROLE", None),
+#         region = os.environ.get("AWS_DEFAULT_REGION", None),
+#         runtime = False
+#     )
+#     response = client.list_foundation_models(
+#         byOutputModality='TEXT'
+#     )
+#     models = response["modelSummaries"]
+#     st.session_state.ls_available_llms = [models[i]["modelId"] for i in range(len(models)) if models[i]["modelLifecycle"]["status"] == "ACTIVE"]
+#     # st.session_state.dc_available_model_ids = {models[i]["modelName"]: models[i]["modelId"] for i in range(len(models)) if models[i]["modelLifecycle"]["status"] == "ACTIVE"}
+#     # st.write(models)
+
 if 'model_generate' not in st.session_state:
     st.session_state.model_generate = "anthropic.claude-3-sonnet-20240229-v1:0"
     
@@ -842,8 +859,8 @@ with col1:
                         st.selectbox(
                             label='Model', 
                             key='selectbox_model_generate',
-                            options=('Claude Sonnet 3', 'Claude Haiku 3', 'Claude Sonnet 3.5'),
-                            index=0,
+                            options=(st.session_state.ls_available_models),
+                            index=2,
                             on_change=model_generate_changed
                         )
                         
@@ -894,11 +911,10 @@ with col1:
                         st.selectbox(
                             label='Model', 
                             key='selectbox_model_reflect',
-                            options=('Claude Sonnet 3', 'Claude Haiku 3', 'Claude Sonnet 3.5'),
-                            index=2,
+                            options=(st.session_state.ls_available_models),
+                            index=3,
                             on_change=model_reflect_changed
                         )
-                        
 
             with st.container(border=True):
                 st.markdown("##### LLM parameters") 
