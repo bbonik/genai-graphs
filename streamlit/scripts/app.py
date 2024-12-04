@@ -655,7 +655,8 @@ if "dc_available_model_ids" not in st.session_state:
         "Claude Haiku 3.5": "anthropic.claude-3-5-haiku-20241022-v1:0",
         "Claude Sonnet 3": "anthropic.claude-3-sonnet-20240229-v1:0",
         "Claude Sonnet 3.5": "anthropic.claude-3-5-sonnet-20240620-v1:0",
-        "Claude Sonnet 3.5 v2":  "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        "Claude Sonnet 3.5 v2":  "anthropic.claude-3-5-sonnet-20241022-v2:0",
+         "Nova Pro":  "amazon.nova-pro-v1:0"
     }
 
 if "ls_available_models" not in st.session_state:
